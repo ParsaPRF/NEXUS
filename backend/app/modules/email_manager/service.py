@@ -163,6 +163,24 @@ class InboxService:
             inbox_count=0,
         )
 
+    async def _resolve_domain(self, domain_name: str | None) -> EmailDomain:
+        """Return the domain to host a new inbox on.
+
+        Raises:
+            EmailDomainNotAllowedError: the named domain is unknown or not usable.
+        """
+        if not domain_name:
+            return await self._default_domain()
+
+        normalized = domain_name.strip().lower().rstrip(".")
+        domain = await self._repo.get_domain_by_name(normalized)
+        if domain is None or not domain.is_usable:
+            raise EmailDomainNotAllowedError(
+                f"Domain {normalized!r} is not registered and verified for test inboxes.",
+                details={"domain": normalized},
+            )
+        return domain
+
     async def _default_domain(self) -> EmailDomain:
         """Return the configured default domain, creating it when it is reserved.
 
@@ -206,16 +224,20 @@ class InboxService:
         ttl_hours: int | None = None,
         local_part: str | None = None,
         campaign_id: int | None = None,
+        domain_name: str | None = None,
         request: Any | None = None,
     ) -> InboxRead:
         """Create one inbox with a random (or requested) alias.
 
+        ``domain_name`` selects a specific hosted domain; when omitted the configured default is
+        used. The named domain must be usable (active and reserved or owner-verified).
+
         Raises:
             ConflictError: the requested alias is already taken.
-            EmailDomainNotAllowedError: the configured domain cannot host inboxes.
+            EmailDomainNotAllowedError: the requested or default domain cannot host inboxes.
         """
         now = datetime.now(UTC)
-        domain = await self._default_domain()
+        domain = await self._resolve_domain(domain_name)
         alias = local_part or await self._unique_alias(domain)
         address = f"{alias}@{domain.domain}"
 
@@ -330,6 +352,46 @@ class InboxService:
             raise NotFoundError(
                 f"Inbox {public_id!r} was not found.", details={"public_id": public_id}
             )
+        return inbox
+
+    async def ensure_inbox_for_address(
+        self, address: str, *, label: str | None = None
+    ) -> InboxRead:
+        """Return the inbox for ``address``, creating it when it does not exist.
+
+        Used by imported campaign identities: reusing an existing inbox matters, because creating
+        a second one for the same address would conflict (and would split the mail across two
+        rows).
+
+        Raises:
+            EmailDomainNotAllowedError: the address's domain is not hosted or not usable.
+            ValidationError: the address is malformed.
+        """
+        normalized = address.strip().lower()
+        existing = await self._repo.get_inbox_by_address(normalized)
+        if existing is not None:
+            names = await self._domain_names()
+            return _to_inbox_read(existing, names.get(existing.domain_id, ""))
+        local_part, _, domain_name = normalized.partition("@")
+        if not local_part or not domain_name:
+            raise ValidationError(
+                f"{address!r} is not a valid address.", details={"address": address}
+            )
+        return await self.create_inbox(local_part=local_part, domain_name=domain_name, label=label)
+
+    async def get_inbox_by_id(self, inbox_id: int) -> Inbox:
+        """Return one inbox by primary key.
+
+        Used by the registration runner, which stores the numeric id on a test row.
+
+        Raises:
+            NotFoundError: no inbox has that id.
+        """
+        if inbox_id is None:
+            raise NotFoundError("The test has no inbox attached.")
+        inbox = await self._repo.get_inbox(inbox_id)
+        if inbox is None:
+            raise NotFoundError(f"Inbox {inbox_id} was not found.", details={"inbox_id": inbox_id})
         return inbox
 
     async def get_inbox_read(self, public_id: str) -> InboxRead:

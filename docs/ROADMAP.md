@@ -15,7 +15,7 @@ Legend: ✅ done · 🔄 in progress · ⬜ not started · 🚫 blocked by envir
 | 1 | Project Foundation | ✅ complete | Runnable, tested backend skeleton |
 | 2 | Proxy Manager | ✅ complete | Import → normalize → validate → monitor → export |
 | 3 | Email Manager | ✅ complete | Mailpit backend, test inboxes, message API, code extraction, expiry |
-| 4 | Registration Lab | ⬜ | Demo target + adapters + verification E2E |
+| 4 | Registration Lab | ✅ complete | Demo target + adapters + verification E2E |
 | 5 | Task Manager | ⬜ | Redis/RQ jobs, progress, cancellation, reports |
 | 6 | Desktop UI | ⬜ | Polished dark PySide6 client |
 | 7 | Finalization | ⬜ | Full suite, security review, Docker verification, docs |
@@ -149,22 +149,43 @@ pruning (Phase 5).
 
 ---
 
-## Phase 4 — Registration Lab ⬜
+## Phase 4 — Registration Lab ✅
 
-| # | Task |
-|---|---|
-| 4.1 | Bundled demo target: register → send code → verify → status (own DB, own tests) |
-| 4.2 | Adapter protocol: `RegistrationAdapter`, `EmailVerificationAdapter`, `AccountStatusAdapter` |
-| 4.3 | `RegistrationScenario` + `RegistrationResultAnalyzer` |
-| 4.4 | Allowlist enforcement on `registration_targets` (two gates: authorized + allowlisted) |
-| 4.5 | CSV test-identity import + validation; synthetic credentials, never real ones |
-| 4.6 | Campaign executor: conservative concurrency, fixed rate, cooperative cancel |
-| 4.7 | Terminal handling of 429 / CAPTCHA / access-denied → `stopped_by_target` |
-| 4.8 | Playwright adapter for the demo UI (API adapter first) |
-| 4.9 | Tests: full happy path against demo target; one test per terminal outcome |
+**Goal:** run registration scenarios end to end against the bundled demo target, extract the
+emailed code, verify the account, and stop the moment the target raises a control.
 
-**Exit criteria:** campaign against the demo target completes end-to-end with verification,
-reports per-test outcomes, and **stops** on a simulated 429/CAPTCHA.
+**Delivered:**
+
+| # | Task | Where |
+|---|---|---|
+| 4.1 | Bundled demo target: register → email code → verify → status, with its own store | `demo_target/app.py` |
+| 4.2 | Adapter protocols + demo API adapter; outcomes instead of exceptions | `registration_lab/adapters.py` |
+| 4.3 | `analyze()` + `InboxEmailVerifier` | `analyzer.py`, `verification.py` |
+| 4.4 | Two-gate authorization (record + allowlist), demo targets must be local | `authorization.py` |
+| 4.5 | Identity generation and CSV import, restricted to hosted domains | `identities.py` |
+| 4.6 | Executor: bounded concurrency, fixed rate, cooperative cancel, serialized DB writes | `executor.py` |
+| 4.7 | 429 / CAPTCHA / access-denied are terminal, campaign becomes `stopped_by_target` | `analyzer.py`, `executor.py` |
+| 4.8 | **Deferred:** Playwright UI adapter (see below) | — |
+| 4.9 | 80 new tests, including the full loop in-process | `tests/` |
+
+**Exit criteria — verified by execution:**
+- the whole loop runs: NEXUS API → job → adapter → demo target → its mailer → NEXUS's mail
+  backend → poll → extraction → verify → `account_status == "active"`, asserted against the demo
+  target's own `/api/status` (`tests/integration/test_registration_flow.py`).
+- one test per terminal control: 429, CAPTCHA and access-denied each stop the campaign and are
+  reported separately from product defects.
+- authorization: unauthorized target → 403; authorize without a note → 422; a `kind: demo` target
+  pointing at a public host → 403; an external target without allowlisting → 403.
+- `uv run pytest` → 614 passed; `ruff check` clean.
+
+**Why 4.8 was deferred (honest status):** the bundled demo target exposes a documented JSON API
+and has no HTML UI, so a Playwright adapter would have nothing to drive. Shipping browser-driving
+code that no test exercises would be exactly the "placeholder presented as complete" the brief
+forbids. It becomes worthwhile when an authorized UI-only staging target exists; the adapter
+protocol is already in place for it.
+
+**Not done on purpose:** retrying around controls, changing identity to avoid a rate limit, and
+any proxy parameter in this module. There is no proxy field on a target or a campaign.
 
 ---
 

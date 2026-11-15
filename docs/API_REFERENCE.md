@@ -1,7 +1,7 @@
 # NEXUS — API Reference
 
 **Base URL:** `http://127.0.0.1:8000`
-**Version:** 0.1.0 (Phases 1–3)
+**Version:** 0.1.0 (Phases 1–4)
 **Interactive docs:** `/docs` (Swagger UI) · `/redoc` · `/openapi.json`
 
 > This document covers **what exists today**. Endpoints planned for later phases are listed at
@@ -559,17 +559,184 @@ Useful after extraction rules improve, and for diagnosing a message whose code w
 
 ---
 
+## 3.7 Registration Lab (Phase 4)
+
+Run registration campaigns against the bundled demonstration application (or an authorized,
+allowlisted target).
+
+**Safety notes**
+
+- A campaign requires a target that is **active**, **explicitly authorized**, carries an
+  **authorization note**, and passes the host allowlist (except the local demo target).
+- A target answering 429, a CAPTCHA challenge, or an access denial **stops the campaign**
+  (`status: stopped_by_target`). It is never retried around, and there is no identity rotation,
+  delay-and-resume or proxy option anywhere in this module.
+- Identities are synthetic. Imported addresses must be on a domain this instance hosts, otherwise
+  their verification email could not be read.
+- Rate and concurrency are fixed at creation time and never adapt to the target.
+
+---
+
+### `GET /api/v1/targets` — list targets
+
+```json
+[
+  {
+    "id": 1, "name": "Bundled demo application", "base_url": "http://127.0.0.1:9000",
+    "kind": "demo", "adapter_name": "demo_api", "is_authorized": true,
+    "authorization_note": "Bundled demonstration application owned by this repository.",
+    "is_active": true, "may_be_tested": true, "created_at": "2026-11-15T23:00:00Z"
+  }
+]
+```
+
+`may_be_tested` is a UI convenience; the executor re-checks the real gates before running.
+
+---
+
+### `POST /api/v1/targets` — register a target
+
+```json
+{
+  "name": "Bundled demo application",
+  "base_url": "http://127.0.0.1:9000",
+  "kind": "demo",
+  "adapter_name": "demo_api",
+  "is_authorized": true,
+  "authorization_note": "Bundled demonstration application owned by this repository."
+}
+```
+
+The URL is validated at creation time.
+
+| Case | Result |
+|---|---|
+| `kind: demo`, loopback host | `201` — allowed without an allowlist entry |
+| `kind: demo`, public host | `403 target_not_authorized` — the exemption is not a bypass |
+| external `kind: api`/`ui`, host not allowlisted | `403 target_not_authorized` |
+| `is_authorized: true` with no note | `422` — the note is mandatory |
+| same `base_url` again | `409` |
+
+---
+
+### `POST /api/v1/targets/{id}/authorize?note=...` — authorize a target
+
+Records that testing this target is authorized, and by whom. Required before a campaign can run.
+
+`200` with the updated target · `422` when the note is empty · `404` for an unknown id.
+
+---
+
+### `GET /api/v1/campaigns` — list campaigns
+
+Query: `status` (repeatable), `limit`, `offset`.
+
+---
+
+### `POST /api/v1/campaigns` — create and queue a campaign
+
+```json
+{
+  "name": "post-deploy check",
+  "target_id": 1,
+  "count": 3,
+  "concurrency": 1,
+  "rate_limit_per_minute": 20,
+  "email_timeout_seconds": 30
+}
+```
+
+Or import identities instead of generating them:
+
+```json
+{ "name": "imported run", "target_id": 1, "identities_text": "email\nqa-1@example.test\n" }
+```
+
+**Response `201`**
+
+```json
+{
+  "campaign": {
+    "public_id": "6f1c…", "name": "post-deploy check", "target_id": 1, "status": "queued",
+    "total_tests": 3, "completed_tests": 0, "succeeded_tests": 0, "failed_tests": 0,
+    "progress_percent": 0.0, "concurrency": 1, "rate_limit_per_minute": 20,
+    "started_at": null, "finished_at": null, "stop_reason": null,
+    "created_at": "2026-11-15T23:00:00Z"
+  },
+  "job_id": "9f2c…"
+}
+```
+
+**Errors:** `403 target_not_authorized` · `404` unknown target · `422` for no identities, an
+identity on an unhosted domain, or too many identities.
+
+---
+
+### `GET /api/v1/campaigns/{public_id}` — campaign status
+
+Returns the campaign with progress. `status` is one of `queued`, `running`, `completed`,
+`failed`, `cancelled`, `stopped_by_target`.
+
+---
+
+### `GET /api/v1/campaigns/{public_id}/results` — per-test results
+
+```json
+{
+  "campaign": { "…": "…" },
+  "items": [
+    {
+      "test_id": 1, "email": "qa-3f9a…@example.test", "status": "active",
+      "outcome": "success", "verification_code": "481920",
+      "code_extraction_confidence": 0.9, "account_status": "active",
+      "duration_ms": 412, "error_message": null,
+      "steps": { "submit": "accepted", "verify": "accepted", "account_status": "active" }
+    }
+  ],
+  "meta": { "total": 1, "limit": 200, "offset": 0 },
+  "summary": {
+    "success": 1, "product_defects": 0, "controls_encountered": 0
+  }
+}
+```
+
+`summary` keeps defects and controls apart on purpose: a failed verification is a bug report, a
+rate limit is a boundary that was respected.
+
+Outcome values: `success`, `verification_failed`, `email_timeout`, `validation_error`,
+`unexpected_error`, `rate_limited`, `captcha_encountered`, `access_denied`.
+
+---
+
+### `POST /api/v1/campaigns/{public_id}/cancel` — cancel
+
+The runner stops before starting the next identity; a test already in flight finishes and is
+recorded. `200` with the updated campaign · `409` when the campaign already reached a terminal
+state.
+
+---
+
+### Demo target (development only)
+
+The bundled application runs separately:
+
+```powershell
+cd NEXUS\backend
+uv run python -m demo_target.run      # http://127.0.0.1:9000
+```
+
+It exposes `POST /api/register`, `POST /api/verify`, `GET /api/status/{email}` and, for testing
+only, `POST /api/_simulate` with `{"mode": "rate_limit" | "captcha" | "access_denied" | "slow"}`.
+That switch is what makes "stop on a control" a testable requirement rather than a claim.
+
+---
+
 ## 4. Planned endpoints (NOT implemented — later phases)
 
 Listed so the design is visible; none of these respond today.
 
 | Phase | Endpoint | Purpose |
 |---|---|---|
-| 4 | `GET /api/v1/targets` | list authorized targets |
-| 4 | `POST /api/v1/targets` | register a target (requires authorization note) |
-| 4 | `POST /api/v1/campaigns` | create and enqueue a campaign |
-| 4 | `GET /api/v1/campaigns/{id}` | status and progress |
-| 4 | `GET /api/v1/campaigns/{id}/results` | per-test outcomes |
 | 5 | `GET /api/v1/jobs` | list jobs |
 | 5 | `GET /api/v1/jobs/{id}` | status, progress, logs |
 | 5 | `POST /api/v1/jobs/{id}/cancel` | cooperative cancellation |

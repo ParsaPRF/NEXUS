@@ -248,3 +248,39 @@ per decision, newest last.
   explicitly timed, which is what the tests want. (+) The in-memory backend implements the same
   protocol, so the whole module is testable with no container. (−) Delivery is not instantaneous;
   a poll interval bounds it. Acceptable for QA flows, where the runner polls anyway.
+
+---
+
+## D15 — A "demo" target must be local; that is why it needs no allowlist entry
+
+- **Status:** Accepted (Phase 4)
+- **Context:** External targets require two gates (stored authorization **and** a host allowlist).
+  The bundled demonstration application would otherwise be unusable out of the box, because a
+  fresh instance has an empty allowlist - which is also the correct default.
+- **Decision:** Targets with ``kind = "demo"`` are exempt from the external allowlist **only if
+  their host is loopback** (``127.0.0.1``, ``localhost``, ``::1``). The exemption is enforced at
+  target creation *and* re-checked by the executor before a run.
+- **Alternatives rejected:**
+  - *Allowlist ``127.0.0.1`` by default* — would also permit every other local service the
+    operator runs, including databases and admin panels. Too broad a hole for a convenience.
+  - *Require the operator to allowlist the demo* — makes the safe path the annoying one, and
+    people respond to that by widening the allowlist.
+- **Consequences:** (+) ``curl``-free demo works immediately. (+) The exemption cannot be turned
+  into a bypass: pointing ``kind: demo`` at a public host is refused with a 403, which the tests
+  assert. (−) A demo target on a LAN address is not supported; it must be reconfigured as an
+  external target with a proper note.
+
+---
+
+## D16 — API adapter only in Phase 4; Playwright deferred deliberately
+
+- **Status:** Accepted (Phase 4)
+- **Context:** The brief lists Playwright "only when browser-level UI testing is required". The
+  bundled demo target exposes a documented JSON API and has no HTML UI.
+- **Decision:** Ship the API adapter. Do **not** ship a Playwright adapter this phase.
+- **Alternatives rejected:** *Write the Playwright adapter anyway* — it would drive nothing, and
+  nothing would test it. Untested code that claims a capability is worse than an absent feature
+  with a documented reason.
+- **Consequences:** (+) Every shipped adapter is exercised by the end-to-end test.
+  (−) A UI-only authorized target cannot be tested yet; the ``RegistrationAdapter`` protocol is the
+  seam where that adapter will attach. Recorded in ROADMAP Phase 4 as the explicit gap.

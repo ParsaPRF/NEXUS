@@ -47,8 +47,9 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # The backend is not installed as a wheel (tool.uv.package = false), so the project root is
-# added to sys.path explicitly. Without this, `import app` fails during collection.
-pythonpath = ["."]
+# added to sys.path explicitly. ".." makes the sibling `demo_target` package importable, which the
+# Phase 4 integration tests need in order to drive it in-process.
+pythonpath = [".", ".."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-q --strict-markers"
