@@ -110,6 +110,10 @@ class JobContext:
 
     A job is expected to call :meth:`set_progress` as it advances and
     :meth:`check_cancelled` between units of work. Both are cheap.
+
+    ``settings`` is the configuration the queue was created with, so a job reads the same
+    configuration as the application that enqueued it. Falling back to the process-wide singleton
+    would make a test-built application run its jobs against production defaults.
     """
 
     job_id: str
@@ -119,6 +123,7 @@ class JobContext:
     progress_current: int = 0
     progress_total: int = 0
     messages: list[str] = field(default_factory=list)
+    settings: Any = None
 
     @property
     def cancelled(self) -> bool:
@@ -200,10 +205,11 @@ class InProcessJobQueue:
     with the API. Both are exactly why the docker profile uses a real worker (Phase 5).
     """
 
-    def __init__(self, *, max_concurrent_jobs: int = 2) -> None:
+    def __init__(self, *, max_concurrent_jobs: int = 2, settings: Any = None) -> None:
         if max_concurrent_jobs < 1:
             raise ValidationError("max_concurrent_jobs must be at least 1.")
         self._max_concurrent = max_concurrent_jobs
+        self._settings = settings
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._contexts: dict[str, JobContext] = {}
         self._statuses: dict[str, str] = {}
@@ -234,6 +240,7 @@ class InProcessJobQueue:
             job_type=job_type,
             payload=safe_payload,
             progress_total=int(options.get("progress_total", 0) or 0),
+            settings=self._settings,
         )
         self._contexts[job_id] = context
         self._statuses[job_id] = "queued"
@@ -382,7 +389,7 @@ def get_queue(settings: Settings | None = None) -> JobQueue:
             "for now (see docs/ROADMAP.md, Phase 5)."
         )
 
-    _queue = InProcessJobQueue(max_concurrent_jobs=settings.jobs.max_workers)
+    _queue = InProcessJobQueue(max_concurrent_jobs=settings.jobs.max_workers, settings=settings)
     return _queue
 
 

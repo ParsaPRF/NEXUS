@@ -189,3 +189,43 @@ per decision, newest last.
   first models exist. Every later model change requires a revision.
 - **Consequences:** (+) Any database state is reproducible from scratch. (+) Catches
   SQLite/Postgres dialect differences early. (−) A small ceremony per schema change.
+
+---
+
+## D12 — The proxy check URL is trusted configuration, not user input
+
+- **Status:** Accepted (Phase 2)
+- **Context:** The SSRF guard (D6) exists because users supply URLs. A proxy health check also
+  needs a target URL, but it is chosen by the operator in `.env`, not typed into a request.
+- **Decision:** `NEXUS_PROXY__CHECK_URL` is treated as trusted configuration: it is not subjected
+  to the private-address block, because the honest default is *this application's own* `/health`
+  route on loopback. What is enforced instead is the ownership rule: the check endpoint must be a
+  service the operator runs. NEXUS does not grade proxies against third-party services.
+- **Alternatives rejected:**
+  - *Require the allowlist for the check URL too* — the allowlist gates **registration targets**,
+    a different trust boundary. Conflating them would force operators to allowlist their own
+    application just to check a proxy, and invite them to widen the registration allowlist for
+    the wrong reason.
+  - *Run the check URL through the SSRF guard as-is* — would block the loopback default and push
+    operators toward pointing checks at an external service, which is the behaviour we do not
+    want.
+- **Consequences:** (+) Checking works out of the box with no third-party traffic.
+  (−) An operator *can* misconfigure it to hit a third-party service. Documented and warned
+  against in `.env.example`, the API reference and this entry.
+
+---
+
+## D13 — Test seam: injectable HTTP transport, proxy omitted when injected
+
+- **Status:** Accepted (Phase 2)
+- **Context:** Health-check classification (timeout vs refusal vs TLS vs proxy auth) needs
+  tests. Opening real sockets to a real proxy would make tests flaky and would also mean the
+  suite depends on network access.
+- **Decision:** `ProxyHealthChecker` accepts an `httpx.AsyncBaseTransport`. When a transport is
+  injected, the proxy is **not** passed to the client.
+- **Why not pass both:** httpx converts `proxy=` into its own proxy transport and ignores any
+  transport supplied alongside it. Passing both silently made the checker attempt real
+  connections — which surfaced as eight failing tests and multi-second stalls, not as an error.
+- **Consequences:** (+) Every failure mode is testable in milliseconds with no network.
+  (−) The seam bypasses proxy routing, so it tests *classification*, not proxy plumbing; proxy
+  URL construction is covered separately by `TestProxyUrlBuilding`.

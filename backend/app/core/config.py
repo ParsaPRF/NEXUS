@@ -149,6 +149,43 @@ class JobSettings(BaseSettings):
     )
 
 
+class ProxySettings(BaseSettings):
+    """Proxy Manager settings.
+
+    ``check_url`` is deliberately **configuration**, not user input. The SSRF guard exists to
+    contain URLs arriving from untrusted callers; this one is chosen by the operator in the
+    environment file, so it is trusted configuration. A different rule applies to it
+    (docs/SECURITY.md 3): the check target must be an endpoint **you own or operate**, never an
+    arbitrary third-party service. The default points at this application's own liveness route,
+    which is exactly such an endpoint.
+    """
+
+    check_url: str = Field(
+        default="http://127.0.0.1:8000/health",
+        description=(
+            "Endpoint used to validate proxy connectivity. MUST be a service you own or operate. "
+            "Defaults to this application's own /health route."
+        ),
+    )
+    expire_after_failures: int = Field(
+        default=5,
+        ge=1,
+        le=100,
+        description="Consecutive failed checks before a proxy is marked expired.",
+    )
+    max_import_bytes: int = Field(
+        default=2_097_152,
+        ge=1024,
+        description="Maximum size of an uploaded proxy list (threat T7).",
+    )
+    batch_limit: int = Field(
+        default=200,
+        ge=1,
+        le=2000,
+        description="Maximum number of proxies one batch-check job will process.",
+    )
+
+
 class Settings(BaseSettings):
     """Root settings object, assembled from the groups above."""
 
@@ -190,6 +227,7 @@ class Settings(BaseSettings):
     network: NetworkSettings = Field(default_factory=NetworkSettings)
     mail: MailSettings = Field(default_factory=MailSettings)
     jobs: JobSettings = Field(default_factory=JobSettings)
+    proxy: ProxySettings = Field(default_factory=ProxySettings)
 
     # ------------------------------------------------------------------ validation
 

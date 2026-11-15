@@ -12,8 +12,8 @@ Legend: ✅ done · 🔄 in progress · ⬜ not started · 🚫 blocked by envir
 | Phase | Name | Status | Deliverable |
 |---|---|---|---|
 | 0 | Discovery & Architecture | ✅ complete | This document set (`docs/`) |
-| 1 | Project Foundation | 🔄 in progress | Runnable, tested backend skeleton |
-| 2 | Proxy Manager | ⬜ | Import → normalize → validate → monitor |
+| 1 | Project Foundation | ✅ complete | Runnable, tested backend skeleton |
+| 2 | Proxy Manager | ✅ complete | Import → normalize → validate → monitor → export |
 | 3 | Email Manager | ⬜ | Mailpit + test inboxes + message API |
 | 4 | Registration Lab | ⬜ | Demo target + adapters + verification E2E |
 | 5 | Task Manager | ⬜ | Redis/RQ jobs, progress, cancellation, reports |
@@ -43,7 +43,7 @@ local profile (D3) · async-first (D4) · env-only secrets (D5) · SSRF guard (D
 
 ---
 
-## Phase 1 — Project Foundation 🔄
+## Phase 1 — Project Foundation ✅
 
 **Goal:** a backend that starts, migrates, authenticates, logs safely, and has a passing test
 suite — with **no features yet**. Everything after this phase is additive.
@@ -77,22 +77,38 @@ suite — with **no features yet**. Everything after this phase is additive.
 
 ---
 
-## Phase 2 — Proxy Manager ⬜
+## Phase 2 — Proxy Manager ✅
 
-| # | Task |
-|---|---|
-| 2.1 | `ProxyParser`: parse `scheme://user:pass@host:port` and `host:port`; normalize scheme, host case, default ports |
-| 2.2 | Importers: TXT, CSV, manual — **data-only parsing**, size-capped, no code execution |
-| 2.3 | Dedupe + `ProxySource` attribution with accepted/rejected counts |
-| 2.4 | Repository + `ProxyService` CRUD, filtering, sorting, pagination |
-| 2.5 | Health checker: bounded-concurrency async checks, timeout, latency recording, `proxy_checks` history |
-| 2.6 | Expiry detection policy (N consecutive failures → `expired`) |
-| 2.7 | CSV/JSON export of selected profiles |
-| 2.8 | Router + schemas; audit events for import/check/export |
-| 2.9 | Tests: parser table-driven, importer edge cases, checker against a local stub server |
+**Goal:** import, normalize, validate and monitor proxies the user owns — and prove each step
+with tests.
 
-**Exit criteria:** import a 1,000-line list → dedupe → check against a local stub → filter by
-`healthy` → export CSV, all covered by tests. **Explicitly not wired to registration.**
+**Delivered (all items from the plan):**
+
+| # | Task | Where |
+|---|---|---|
+| 2.1 | Parser: URL and `host:port[:user:pass]` forms, protocol aliases, IPv6, canonical hosts | `modules/proxy_manager/parser.py` |
+| 2.2 | TXT + CSV importers (header aliases or positional), size caps, no code execution | `importers.py` |
+| 2.3 | De-duplication inside a file and against stored proxies; source attribution with counts | `service.py`, `repository.py` |
+| 2.4 | Repository + service: filter, search, sort, paginate, enable/disable, delete | `repository.py`, `service.py` |
+| 2.5 | Health checker: bounded concurrency, mandatory timeout, latency, `proxy_checks` history | `checker.py` |
+| 2.6 | Expiry policy: N consecutive failures → `expired` | `service._apply_outcome` |
+| 2.7 | CSV/JSON export with no credential fields | `service.export` |
+| 2.8 | 9 REST endpoints + audit records for import/check/batch/export/delete | `router.py` |
+| 2.9 | 157 new tests (parser, importers, checker, API) | `tests/unit/`, `tests/integration/` |
+| 2.10 | Batch check as a background job with progress and cancellation points | `jobs.py` |
+
+**Exit criteria — verified by execution:**
+- import a list → dedupe → check against an injected transport → filter by `healthy` → export CSV:
+  covered end to end by `tests/integration/test_proxy_api.py` (47 tests).
+- parser/importers: 91 tests, table-driven over accepted and rejected forms.
+- checker: 19 tests, including timeout / refusal / TLS / proxy-error classification and a
+  proven concurrency cap.
+- `uv run pytest` → 415 passed; `ruff check` clean.
+- Credentials: refused when no key is configured, encrypted when one is, never returned by any
+  endpoint or export.
+
+**Not done on purpose:** history pruning (Phase 5 retention job) and anything connecting proxies
+to registration (forbidden by design — there is no proxy parameter in the registration code).
 
 ---
 

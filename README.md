@@ -16,7 +16,7 @@ registration testing against applications you own.**
 |---|---|---|
 | 0 | Discovery, architecture, database design, roadmap | ✅ complete |
 | 1 | Project foundation: config, logging, security, schema, API skeleton, tests | ✅ complete |
-| 2 | Proxy Manager | ⬜ not started |
+| 2 | Proxy Manager: import, normalize, validate, monitor, export | ✅ complete |
 | 3 | Email Manager (Mailpit) | ⬜ not started |
 | 4 | Registration Lab + bundled demo target | ⬜ not started |
 | 5 | Task Manager (Redis/RQ) | ⬜ not started |
@@ -24,9 +24,10 @@ registration testing against applications you own.**
 | 7 | Finalization, Docker verification | ⬜ not started |
 
 **What actually works today:** the backend starts, migrates its schema, authenticates API
-requests, logs with mandatory secret redaction, validates outbound URLs against SSRF, and has a
-passing test suite. There is **no** proxy importing, inbox creation, registration execution or
-GUI yet. The API currently exposes only health and instance-metadata endpoints.
+requests, logs with mandatory secret redaction, validates outbound URLs against SSRF, and
+manages proxies end to end - import a TXT/CSV list, de-duplicate it, filter and sort the pool,
+run single or batch health checks against an endpoint you configure, watch the expiry policy
+apply, and export to CSV/JSON. There is **no** inbox creation, registration execution or GUI yet.
 
 ---
 
@@ -96,7 +97,7 @@ uv run ruff check .           # lint
 uv run ruff format --check .  # formatting
 ```
 
-Current baseline: **258 passing**, `ruff` clean.
+Current baseline: **415 passing**, `ruff` clean.
 
 ---
 

@@ -77,6 +77,12 @@ def test_settings(tmp_path) -> Settings:
         database={"url": f"sqlite+aiosqlite:///{tmp_path / 'test.db'}"},
         mail={"backend": "memory", "reserved_domain": "example.test"},
         jobs={"backend": "inprocess", "max_workers": 1},
+        proxy={
+            "check_url": "http://127.0.0.1:8000/health",
+            "expire_after_failures": 2,
+            "max_import_bytes": 65536,
+            "batch_limit": 50,
+        },
         network={
             "allow_private_targets": False,
             "allowed_target_hosts": [],
