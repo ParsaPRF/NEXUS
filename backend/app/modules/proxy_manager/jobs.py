@@ -16,7 +16,8 @@ from typing import Any
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.database.engine import get_session_factory
-from app.jobs.queue import JobContext, register_handler
+from app.jobs.queue import JobContext
+from app.modules.task_manager.tracker import register_tracked_handler
 
 logger = get_logger(__name__)
 
@@ -89,4 +90,4 @@ async def run_proxy_check_batch(context: JobContext, payload: dict[str, Any]) ->
 
 #: Register at import time. ``app.modules.proxy_manager`` is imported by ``app.api.router``, so
 #: the handler exists before any request can enqueue this job type.
-register_handler("proxy.check_batch", run_proxy_check_batch)
+register_tracked_handler("proxy.check_batch", run_proxy_check_batch)

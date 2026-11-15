@@ -381,13 +381,12 @@ def get_queue(settings: Settings | None = None) -> JobQueue:
 
         settings = get_settings()
 
-    if settings.jobs.backend == "rq":  # pragma: no cover - Phase 5
-        from app.core.exceptions import ConfigurationError
+    if settings.jobs.backend == "rq":
+        # Imported lazily so the local profile never needs the optional redis/rq packages.
+        from app.jobs.rq_queue import RqJobQueue
 
-        raise ConfigurationError(
-            "The Redis/RQ job backend arrives in Phase 5. Use NEXUS_JOBS__BACKEND=inprocess "
-            "for now (see docs/ROADMAP.md, Phase 5)."
-        )
+        _queue = RqJobQueue(settings)
+        return _queue
 
     _queue = InProcessJobQueue(max_concurrent_jobs=settings.jobs.max_workers, settings=settings)
     return _queue

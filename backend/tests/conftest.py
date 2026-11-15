@@ -33,6 +33,57 @@ os.environ.setdefault("NEXUS_MAIL__BACKEND", "memory")
 import pytest  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 
+# --------------------------------------------------------------------------------------
+# Synthetic job handlers, registered once for the whole session.
+#
+# They live here because more than one test module needs them (task manager and RQ backend), and
+# `register_handler` refuses to register the same job type twice with different functions. A
+# per-module registration would make the tests order-dependent.
+# --------------------------------------------------------------------------------------
+from app.core.exceptions import NotFoundError  # noqa: E402
+from app.jobs.queue import get_handler  # noqa: E402
+from app.modules.task_manager.tracker import register_tracked_handler  # noqa: E402
+
+
+def _register_once(job_type: str, handler) -> None:  # type: ignore[no-untyped-def]
+    """Register a synthetic handler unless it already exists.
+
+    ``register_handler`` refuses a second registration with a different function object. pytest can
+    import this conftest under two module names (``conftest`` and ``tests.conftest``) depending on
+    how a test module is collected, which would otherwise raise during collection.
+    """
+    try:
+        get_handler(job_type)
+    except NotFoundError:
+        register_tracked_handler(job_type, handler)
+
+
+async def _test_slow_job(context, payload):  # type: ignore[no-untyped-def]
+    """A cancellable job: checks for cancellation between steps."""
+    import asyncio
+
+    context.set_total(100)
+    for index in range(100):
+        context.check_cancelled()
+        context.advance(message=f"step {index}")
+        await asyncio.sleep(0.02)
+    return {"steps": 100}
+
+
+async def _test_progress_job(context, payload):  # type: ignore[no-untyped-def]
+    """A short job that reports progress and log messages."""
+    import asyncio
+
+    context.set_total(3)
+    for index in range(3):
+        context.advance(message=f"processed {index + 1}")
+        await asyncio.sleep(0.01)
+    return {"processed": 3}
+
+
+_register_once("test.slow", _test_slow_job)
+_register_once("test.progress", _test_progress_job)
+
 from app.core.config import Settings, get_settings  # noqa: E402
 from app.database.engine import (  # noqa: E402
     dispose_engine,

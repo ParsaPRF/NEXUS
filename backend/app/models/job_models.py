@@ -78,6 +78,15 @@ class BackgroundJob(Base, TimestampMixin):
     worker_name: Mapped[str | None] = mapped_column(
         String(64), nullable=True, doc="Which worker process executed this job."
     )
+    queue_job_id: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        index=True,
+        doc=(
+            "Identifier assigned by the queue backend. Needed to cancel a job, and stored here "
+            "so a restart does not orphan cancellable work."
+        ),
+    )
 
     logs: Mapped[list[JobLog]] = relationship(
         back_populates="job",

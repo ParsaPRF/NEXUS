@@ -19,7 +19,7 @@ registration testing against applications you own.**
 | 2 | Proxy Manager: import, normalize, validate, monitor, export | ✅ complete |
 | 3 | Email Manager: Mailpit backend, test inboxes, message API, code extraction, expiry | ✅ complete |
 | 4 | Registration Lab + bundled demo target | ✅ complete |
-| 5 | Task Manager (Redis/RQ) | ⬜ not started |
+| 5 | Task Manager: durable jobs, monitor, analytics, RQ backend | ✅ complete |
 | 6 | PySide6 desktop UI | ⬜ not started |
 | 7 | Finalization, Docker verification | ⬜ not started |
 
@@ -28,7 +28,9 @@ requests, logs with mandatory secret redaction, validates outbound URLs against 
 proxies end to end (import, de-duplicate, filter, check, expire, export), runs disposable test
 inboxes (create, poll Mailpit, extract codes, search, export, expire), and executes registration
 campaigns against the bundled demo application: submit → receive the code → verify → confirm the
-account is active, with per-test results and a stop when the target raises a control. There is
+account is active, with per-test results and a stop when the target raises a control. Every job is
+tracked durably (status, progress, logs, duration, cancellation) and reported through the job
+monitor and analytics endpoints, with an RQ backend available for the docker profile. There is
 **no** desktop GUI yet.
 
 ---
@@ -99,7 +101,7 @@ uv run ruff check .           # lint
 uv run ruff format --check .  # formatting
 ```
 
-Current baseline: **614 passing**, `ruff` clean.
+Current baseline: **654 passing**, `ruff` clean.
 
 ---
 

@@ -363,24 +363,17 @@ class ProxyService:
         if not found:
             raise NotFoundError("None of the requested proxies exist.")
 
-        from app.jobs.queue import get_queue
+        # The job row is created here so the UI has something to poll, and so an idempotency key
+        # could be added later without changing this call site.
+        from app.modules.task_manager.service import JobService
 
-        queue = get_queue(self._settings)
-        job_id = await queue.enqueue(
+        job, _queue_id, _created = await JobService(self._session, self._settings).enqueue(
             "proxy.check_batch",
-            {"proxy_ids": [proxy.id for proxy in found]},
-            progress_total=len(found),
+            {"proxy_ids": [proxy.id for proxy in found], "progress_total": len(found)},
+            request=request,
         )
-        await self._audit.record(
-            "proxy.check_batch",
-            entity_type="job",
-            entity_id=job_id,
-            detail={"proxy_count": len(found)},
-            request_id=getattr(getattr(request, "state", None), "request_id", None),
-        )
-        await self._session.commit()
         return ProxyBatchCheckResponse(
-            job_id=job_id, job_type="proxy.check_batch", proxy_count=len(found)
+            job_id=job.public_id, job_type="proxy.check_batch", proxy_count=len(found)
         )
 
     # ------------------------------------------------------------------ stats

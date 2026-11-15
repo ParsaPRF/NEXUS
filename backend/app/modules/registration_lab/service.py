@@ -217,14 +217,21 @@ class RegistrationService:
         )
         await self._session.commit()
 
-        from app.jobs.queue import get_queue
+        from app.modules.task_manager.service import JobService
 
-        job_id = await get_queue(self._settings).enqueue(
+        job, _queue_id, _created = await JobService(self._session, self._settings).enqueue(
             "campaign.run",
-            {"campaign_id": campaign.id, "email_timeout_seconds": email_timeout_seconds},
-            progress_total=len(addresses),
+            {
+                "campaign_id": campaign.id,
+                "email_timeout_seconds": email_timeout_seconds,
+                # The job row reads its total from the payload; the monitor then reports against it.
+                "progress_total": len(addresses),
+            },
+            request=request,
         )
-        return campaign, job_id
+        campaign.job = job
+        await self._session.commit()
+        return campaign, job.public_id
 
     async def _resolve_identities(
         self, *, name: str, count: int, identities_text: str | None

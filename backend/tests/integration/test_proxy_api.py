@@ -15,7 +15,6 @@ from sqlalchemy import select
 
 from app.core.security import CredentialCipher
 from app.database.engine import get_session_factory
-from app.jobs.queue import get_queue
 from app.main import create_app
 from app.models.core_models import AuditLog
 from app.models.enums import ProxyStatus
@@ -425,7 +424,7 @@ class TestBatchCheck:
     """The batch endpoint enqueues work and the job performs it."""
 
     async def test_batch_check_runs_and_updates_proxies(
-        self, client: AsyncClient, check_ok, test_settings
+        self, client: AsyncClient, check_ok
     ) -> None:  # type: ignore[no-untyped-def]
         await _import(client, "p1.example.test:8080\np2.example.test:8080\n")
         ids = [item["id"] for item in (await _list(client))["items"]]
@@ -436,13 +435,15 @@ class TestBatchCheck:
         assert body["proxy_count"] == 2
         job_id = body["job_id"]
 
-        queue = get_queue(test_settings)
-        for _ in range(100):
-            status = await queue.get_status(job_id)
-            if status.status in {"completed", "failed", "cancelled"}:
+        # The API now returns the durable job id, so the test polls the job monitor exactly like
+        # the desktop UI will - which also exercises the Phase 5 endpoints.
+        job: dict = {}
+        for _ in range(150):
+            job = (await client.get(f"/api/v1/jobs/{job_id}")).json()
+            if job["status"] in {"completed", "failed", "cancelled"}:
                 break
             await asyncio.sleep(0.02)
-        assert status.status == "completed", status
+        assert job["status"] == "completed", job
 
         async with get_session_factory()() as session:
             proxies = (await session.execute(select(Proxy))).scalars().all()
@@ -464,9 +465,7 @@ class TestBatchCheck:
         response = await client.post("/api/v1/proxies/check-batch", json={"proxy_ids": ids})
         assert response.status_code == 422
 
-    async def test_status_filter_selects_proxies(
-        self, client: AsyncClient, check_ok, test_settings
-    ) -> None:  # type: ignore[no-untyped-def]
+    async def test_status_filter_selects_proxies(self, client: AsyncClient, check_ok) -> None:  # type: ignore[no-untyped-def]
         await _import(client, "p1.example.test:8080\n")
 
         response = await client.post(

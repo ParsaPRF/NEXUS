@@ -21,7 +21,6 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.database.engine import get_session_factory
-from app.jobs.queue import get_queue
 from app.models.enums import CampaignStatus
 from app.models.registration_models import RegistrationResult
 from app.modules.email_manager.backends import InMemoryMailBackend, get_backend
@@ -83,16 +82,19 @@ async def _run_campaign(client: AsyncClient, target_id: int, **overrides: object
     return response.json()
 
 
-async def _wait_for_job(settings, job_id: str, limit_seconds: float = 20.0) -> str:  # type: ignore[no-untyped-def]
-    """Poll the in-process queue until the job finishes."""
-    queue = get_queue(settings)
+async def _wait_for_job(
+    client: AsyncClient, job_public_id: str, limit_seconds: float = 25.0
+) -> str:
+    """Poll the job monitor until the campaign job finishes."""
     deadline = asyncio.get_event_loop().time() + limit_seconds
+    status = "queued"
     while asyncio.get_event_loop().time() < deadline:
-        status = await queue.get_status(job_id)
-        if status.status in {"completed", "failed", "cancelled"}:
-            return status.status
+        job = (await client.get(f"/api/v1/jobs/{job_public_id}")).json()
+        status = job["status"]
+        if status in {"completed", "failed", "cancelled"}:
+            return status
         await asyncio.sleep(0.05)
-    msg = f"job {job_id} did not finish in {limit_seconds}s"
+    msg = f"job {job_public_id} did not finish in {limit_seconds}s (last status: {status})"
     raise AssertionError(msg)
 
 
@@ -109,7 +111,7 @@ class TestHappyPath:
     ) -> None:
         target = await _create_target(client)
         body = await _run_campaign(client, target["id"], count=1)
-        assert await _wait_for_job(test_settings, body["job_id"]) == "completed"
+        assert await _wait_for_job(client, body["job_id"]) == "completed"
 
         results = (
             await client.get(f"/api/v1/campaigns/{body['campaign']['public_id']}/results")
@@ -126,7 +128,7 @@ class TestHappyPath:
         # The whole point: the demo target must report an active account, not just a green row.
         target = await _create_target(client)
         body = await _run_campaign(client, target["id"], count=1)
-        await _wait_for_job(test_settings, body["job_id"])
+        await _wait_for_job(client, body["job_id"])
 
         results = (
             await client.get(f"/api/v1/campaigns/{body['campaign']['public_id']}/results")
@@ -145,7 +147,7 @@ class TestHappyPath:
     async def test_multiple_identities(self, client: AsyncClient, test_settings, demo) -> None:
         target = await _create_target(client)
         body = await _run_campaign(client, target["id"], count=3, concurrency=2)
-        await _wait_for_job(test_settings, body["job_id"])
+        await _wait_for_job(client, body["job_id"])
 
         results = (
             await client.get(f"/api/v1/campaigns/{body['campaign']['public_id']}/results")
@@ -159,7 +161,7 @@ class TestHappyPath:
     ) -> None:
         target = await _create_target(client)
         body = await _run_campaign(client, target["id"], count=1)
-        await _wait_for_job(test_settings, body["job_id"])
+        await _wait_for_job(client, body["job_id"])
 
         async with get_session_factory()() as session:
             rows = (await session.execute(select(RegistrationResult))).scalars().all()
@@ -198,7 +200,7 @@ class TestControls:
             await demo_client.post("/api/_simulate", json={"mode": mode})
 
         body = await _run_campaign(client, target["id"], count=3)
-        await _wait_for_job(test_settings, body["job_id"])
+        await _wait_for_job(client, body["job_id"])
 
         results = (
             await client.get(f"/api/v1/campaigns/{body['campaign']['public_id']}/results")
@@ -218,7 +220,7 @@ class TestControls:
             await demo_client.post("/api/_simulate", json={"mode": "rate_limit"})
 
         body = await _run_campaign(client, target["id"], count=4, concurrency=1)
-        await _wait_for_job(test_settings, body["job_id"])
+        await _wait_for_job(client, body["job_id"])
 
         results = (
             await client.get(f"/api/v1/campaigns/{body['campaign']['public_id']}/results")
@@ -258,7 +260,7 @@ class TestAuthorization:
         assert authorized.json()["may_be_tested"] is True
 
         body = await _run_campaign(client, target["id"], count=1)
-        await _wait_for_job(test_settings, body["job_id"])
+        await _wait_for_job(client, body["job_id"])
         results = (
             await client.get(f"/api/v1/campaigns/{body['campaign']['public_id']}/results")
         ).json()
@@ -357,7 +359,7 @@ class TestIdentities:
         inbox = (await client.post("/api/v1/inboxes", json={"local_part": "imported"})).json()
 
         body = await _run_campaign(client, target["id"], count=0, identities_text=inbox["address"])
-        await _wait_for_job(test_settings, body["job_id"])
+        await _wait_for_job(client, body["job_id"])
 
         results = (
             await client.get(f"/api/v1/campaigns/{body['campaign']['public_id']}/results")
@@ -406,7 +408,7 @@ class TestLifecycle:
     ) -> None:
         target = await _create_target(client)
         body = await _run_campaign(client, target["id"], count=1)
-        await _wait_for_job(test_settings, body["job_id"])
+        await _wait_for_job(client, body["job_id"])
 
         response = await client.post(f"/api/v1/campaigns/{body['campaign']['public_id']}/cancel")
         assert response.status_code == 409
@@ -414,7 +416,7 @@ class TestLifecycle:
     async def test_campaign_list_and_lookup(self, client: AsyncClient, test_settings, demo) -> None:
         target = await _create_target(client)
         body = await _run_campaign(client, target["id"], count=1)
-        await _wait_for_job(test_settings, body["job_id"])
+        await _wait_for_job(client, body["job_id"])
 
         listing = (await client.get("/api/v1/campaigns")).json()
         assert listing["meta"]["total"] == 1

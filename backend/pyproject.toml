@@ -22,6 +22,8 @@ dependencies = [
 postgres = ["asyncpg>=0.30"]
 # Browser-level UI testing for the Registration Lab (Phase 4+).
 browser = ["playwright>=1.49"]
+# Redis + RQ job backend (docker profile). Optional so the local profile stays dependency-free.
+queue = ["rq>=2.0", "redis>=5.0"]
 
 [dependency-groups]
 dev = [
@@ -29,6 +31,8 @@ dev = [
     "pytest-asyncio>=0.25",
     "pytest-cov>=6.0",
     "ruff>=0.9",
+    # In-process Redis substitute, so the RQ adapter is exercised without a Redis server.
+    "fakeredis>=2.26",
 ]
 
 # ---------------------------------------------------------------------------------------

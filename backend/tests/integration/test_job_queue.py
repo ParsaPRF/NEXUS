@@ -427,16 +427,19 @@ class TestQueueFactory:
         assert isinstance(queue, InProcessJobQueue)
         await reset_queue()
 
-    async def test_rq_backend_reports_that_it_is_not_implemented_yet(self, test_settings) -> None:
-        # A silent fallback to the in-process runner would look like a working Redis setup.
-        from app.core.exceptions import ConfigurationError
-        from app.jobs.queue import reset_queue
+    async def test_rq_backend_is_selectable(self, test_settings) -> None:
+        # Phase 5 implemented the RQ adapter, so the factory builds it instead of raising.
+        # RQ-specific behaviour is covered in tests/integration/test_rq_queue.py.
+        from app.jobs.queue import JobQueue, reset_queue
 
         await reset_queue()
         settings = test_settings.model_copy(deep=True)
         settings.jobs.backend = "rq"
-        with pytest.raises(ConfigurationError, match="Phase 5"):
-            get_queue(settings)
+
+        queue = get_queue(settings)
+        assert isinstance(queue, JobQueue)
+        assert type(queue).__name__ == "RqJobQueue"
+        await reset_queue()
 
     async def test_reset_clears_the_singleton(self, test_settings) -> None:
         from app.jobs.queue import reset_queue

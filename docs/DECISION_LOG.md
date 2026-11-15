@@ -284,3 +284,56 @@ per decision, newest last.
 - **Consequences:** (+) Every shipped adapter is exercised by the end-to-end test.
   (−) A UI-only authorized target cannot be tested yet; the ``RegistrationAdapter`` protocol is the
   seam where that adapter will attach. Recorded in ROADMAP Phase 4 as the explicit gap.
+
+---
+
+## D17 — Job state lives in the database; the queue only schedules
+
+- **Status:** Accepted (Phase 5)
+- **Context:** A queue holds its own job status, but that status is invisible to users, lost when
+  Redis is flushed, and different per backend (RQ vs in-process).
+- **Decision:** ``background_jobs`` is the source of truth for status, progress, attempts, duration
+  and logs. A single tracked-handler wrapper updates that row; the queue id is stored beside it
+  (migration 0002) so cancellation can reach the scheduler.
+- **Alternatives rejected:**
+  - *Read status from the queue* — two vocabularies, two failure modes, and no history after a
+    restart.
+  - *Track progress on every increment* — one UPDATE per item; the monitor samples instead.
+- **Consequences:** (+) One monitor and one report for every job type. (+) Cancellation works for
+  any backend because it is a database flag. (−) Two writes per job type (row + queue), which is a
+  small price for a consistent view.
+
+---
+
+## D18 — The cancel flag is committed before waiting on the queue
+
+- **Status:** Accepted (Phase 5) - **a bug fix recorded as a decision**
+- **Context:** ``request_cancel`` set ``cancel_requested``, flushed, then awaited the queue's
+  cancellation for up to five seconds before committing.
+- **What went wrong:** the running job reads the flag through a *different* session, so an
+  uncommitted flag was invisible to it. The job kept running, the queue force-cancelled the task
+  after its timeout, and the row was left at ``running`` - the test that cancels a live job is what
+  exposed it.
+- **Decision:** commit the flag (and the audit record) before asking the queue to cancel, then
+  apply any post-cancel status change in a second transaction.
+- **Consequences:** (+) Cancellation is visible to the job immediately and the row always reaches a
+  terminal state. (−) Two commits per cancel, which is irrelevant at this frequency.
+
+---
+
+## D19 — RQ adapter verified against `fakeredis`, worker execution still unverified
+
+- **Status:** Accepted (Phase 5)
+- **Context:** The brief asks for Redis + RQ, but no Redis server (and no Docker daemon) exists on
+  the development machine.
+- **Decision:** Implement the adapter and the worker entry point, and test the adapter against
+  ``fakeredis``: enqueue, status mapping, cancellation, plus the sync dispatcher running a real
+  async handler. State plainly, in the roadmap and in this entry, that a real worker against a real
+  Redis is unverified.
+- **Alternatives rejected:**
+  - *Ship RQ untested* — would violate the rule that nothing is claimed to work without being run.
+  - *Skip RQ entirely* — the protocol, adapter and worker are real code; the only missing step is
+    the integration run, which Phase 7 performs.
+- **Also recorded:** rq returns a ``Status`` enum; ``str(Status.QUEUED)`` is ``"Status.QUEUED"``,
+  so mapping it directly silently produced ``unknown`` for every job. The adapter reads ``.value``
+  first, which works across rq versions that return either a string or an enum.

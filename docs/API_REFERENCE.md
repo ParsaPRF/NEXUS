@@ -1,7 +1,7 @@
 # NEXUS — API Reference
 
 **Base URL:** `http://127.0.0.1:8000`
-**Version:** 0.1.0 (Phases 1–4)
+**Version:** 0.1.0 (Phases 1–5)
 **Interactive docs:** `/docs` (Swagger UI) · `/redoc` · `/openapi.json`
 
 > This document covers **what exists today**. Endpoints planned for later phases are listed at
@@ -731,17 +731,98 @@ That switch is what makes "stop on a control" a testable requirement rather than
 
 ---
 
-## 4. Planned endpoints (NOT implemented — later phases)
+## 3.8 Task Manager & Analytics (Phase 5)
 
-Listed so the design is visible; none of these respond today.
+Every background job has a durable row: status, progress, logs, attempts, duration and an
+idempotency key. Job state lives in the database, so it survives a restart and is identical
+whether the job ran in-process or in an RQ worker.
 
-| Phase | Endpoint | Purpose |
-|---|---|---|
-| 5 | `GET /api/v1/jobs` | list jobs |
-| 5 | `GET /api/v1/jobs/{id}` | status, progress, logs |
-| 5 | `POST /api/v1/jobs/{id}/cancel` | cooperative cancellation |
-| 5 | `GET /api/v1/analytics/summary` | module statistics |
-| 5 | `GET /api/v1/analytics/export` | CSV/JSON report |
+**Safety notes**
+
+- Cancellation is **cooperative**: the flag is committed, then the running job stops at its next
+  safe point. Nothing is killed mid-transaction.
+- `idempotency_key` makes a retried enqueue reuse the existing job instead of doing the work twice.
+- Job payloads are redacted before storage, so a credential in an argument cannot be read back.
+
+---
+
+### `GET /api/v1/jobs` — list jobs
+
+Query: `status` (repeatable: `queued|running|completed|failed|cancelled`), `job_type`, `limit`
+(1–200), `offset`.
+
+```json
+{
+  "items": [
+    {
+      "public_id": "91332290-…", "job_type": "proxy.check_batch", "status": "completed",
+      "progress_current": 3, "progress_total": 3, "progress_percent": 100.0,
+      "attempts": 1, "duration_ms": 412, "queued_at": "2026-11-15T23:30:00Z",
+      "started_at": "2026-11-15T23:30:00Z", "finished_at": "2026-11-15T23:30:00Z",
+      "error_message": null, "cancel_requested": false, "idempotency_key": null
+    }
+  ],
+  "meta": { "total": 1, "limit": 50, "offset": 0 }
+}
+```
+
+---
+
+### `GET /api/v1/jobs/{public_id}` — one job with logs
+
+Adds `logs: [{level, message, created_at}]` and the redacted `payload`.
+
+`404` for an unknown id.
+
+---
+
+### `POST /api/v1/jobs/{public_id}/cancel` — cancel
+
+`202` with `{public_id, status, cancel_requested}`. The job stops at its next safe point and ends
+`cancelled`.
+
+`409` when the job already reached a terminal state · `404` for an unknown id.
+
+---
+
+### `GET /api/v1/analytics/summary` — dashboard counts
+
+```json
+{
+  "jobs": { "completed": 4, "running": 1 },
+  "proxies": { "healthy": 2, "unknown": 1 },
+  "inboxes": { "active": 3 },
+  "campaigns": { "completed": 1 },
+  "total_jobs": 5, "total_proxies": 3, "total_inboxes": 3, "total_campaigns": 1,
+  "active_inboxes": 3, "healthy_proxies": 2,
+  "running_campaigns": 0, "running_jobs": 1,
+  "completed_jobs": 4, "failed_jobs": 0,
+  "recent_activity": [
+    { "action": "proxy.import", "entity_type": "proxy_source", "entity_id": "1",
+      "outcome": "success", "created_at": "2026-11-15T23:29:00Z" }
+  ]
+}
+```
+
+---
+
+### `GET /api/v1/analytics/export` — CSV or JSON report
+
+Query: `dataset=jobs|campaigns`, `format=csv|json`. Returns a download; the `X-Max-Rows` header
+reports the cap (10,000).
+
+`422` for an unknown dataset or format.
+
+---
+
+## 4. Planned endpoints (NOT implemented)
+
+**There are none left in the backend as of Phase 5.** Every module's API is implemented and
+tested.
+
+Phase 6 adds a desktop *client*, not new endpoints: it consumes exactly the API documented above.
+If a later phase adds an endpoint, it is listed here until it is implemented - never documented as
+if it already works.
 
 ---
 

@@ -12,8 +12,9 @@ from typing import Any
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.database.engine import get_session_factory
-from app.jobs.queue import JobContext, register_handler
+from app.jobs.queue import JobContext
 from app.models.enums import CampaignStatus
+from app.modules.task_manager.tracker import register_tracked_handler
 
 logger = get_logger(__name__)
 
@@ -72,4 +73,4 @@ async def run_campaign(context: JobContext, payload: dict[str, Any]) -> dict[str
             raise
 
 
-register_handler("campaign.run", run_campaign)
+register_tracked_handler("campaign.run", run_campaign)

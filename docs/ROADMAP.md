@@ -16,7 +16,7 @@ Legend: ✅ done · 🔄 in progress · ⬜ not started · 🚫 blocked by envir
 | 2 | Proxy Manager | ✅ complete | Import → normalize → validate → monitor → export |
 | 3 | Email Manager | ✅ complete | Mailpit backend, test inboxes, message API, code extraction, expiry |
 | 4 | Registration Lab | ✅ complete | Demo target + adapters + verification E2E |
-| 5 | Task Manager | ⬜ | Redis/RQ jobs, progress, cancellation, reports |
+| 5 | Task Manager | ✅ complete | Durable jobs, monitor, cancellation, analytics, RQ backend |
 | 6 | Desktop UI | ⬜ | Polished dark PySide6 client |
 | 7 | Finalization | ⬜ | Full suite, security review, Docker verification, docs |
 
@@ -189,21 +189,38 @@ any proxy parameter in this module. There is no proxy field on a target or a cam
 
 ---
 
-## Phase 5 — Task Manager ⬜
+## Phase 5 - Task Manager & Analytics ✅
 
-| # | Task |
-|---|---|
-| 5.1 | `JobQueue` protocol + `InProcessQueue` (already used in Phases 2–4) |
-| 5.2 | Redis + RQ backend and worker entry point |
-| 5.3 | Job lifecycle: queued/running/completed/failed/cancelled + progress |
-| 5.4 | Cooperative cancellation (`cancel_requested` checked at safe points) |
-| 5.5 | Idempotency via `idempotency_key`; no duplicate execution on retry |
-| 5.6 | `job_logs` streaming; duration tracking |
-| 5.7 | Analytics: module stats + CSV/JSON reports |
-| 5.8 | Tests: lifecycle, cancellation mid-run, retry-dedupe |
+**Goal:** make background work observable, cancellable and reportable - not merely runnable.
 
-**Exit criteria:** jobs run in RQ workers, report progress, cancel safely, and a retried job
-does not double-execute side effects.
+**Delivered:**
+
+| # | Task | Where |
+|---|---|---|
+| 5.1 | Queue protocol + in-process runner (kept as the local profile) | `app/jobs/queue.py` |
+| 5.2 | RQ adapter, worker entry point, sync dispatcher | `app/jobs/rq_queue.py`, `app/workers/` |
+| 5.3 | Durable lifecycle: queued -> running -> terminal, with progress and duration | `task_manager/tracker.py` |
+| 5.4 | Cooperative cancellation driven by the database flag | `tracker._monitor`, `service.request_cancel` |
+| 5.5 | Idempotency: same key returns the same row, no second execution | `service.enqueue` |
+| 5.6 | Job logs, attempts, duration; monitor API including logs | `tracker.py`, `router.py` |
+| 5.7 | Analytics summary + CSV/JSON export of jobs and campaigns | `task_manager/service.py` |
+| 5.8 | 40 new tests (26 task manager, 14 RQ) | `tests/integration/` |
+| 5.9 | Migration 0002 adds `background_jobs.queue_job_id` | `alembic/versions/0002_job_queue_id.py` |
+
+**Exit criteria - verified by execution:**
+- lifecycle: a synthetic job is observed queued -> running -> completed with progress 3/3, logs
+  and a duration, all read through the HTTP monitor (`tests/integration/test_task_manager.py`).
+- idempotency: two enqueues with the same key produce exactly one row and one execution.
+- cancellation: a running job stops within the monitor interval and ends `cancelled` with
+  `progress_current < total`; cancelling a finished job returns 409.
+- analytics: the summary counts every module; exports produce valid CSV and JSON.
+- `uv run pytest` -> 654 passed; `ruff check` clean; migration 0002 applies to a fresh database.
+
+**Honest gap:** the RQ adapter is tested against `fakeredis` (enqueue, status mapping,
+cancellation) and its sync dispatcher runs a real async handler. A real RQ worker against a real
+Redis remains **unverified** until Phase 7 runs Docker - there is no Redis server on this machine.
+
+**Not done on purpose:** retry storms, job priorities and a scheduler UI (the UI is Phase 6).
 
 ---
 

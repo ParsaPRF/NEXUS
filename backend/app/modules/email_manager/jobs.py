@@ -15,7 +15,8 @@ from typing import Any
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.database.engine import get_session_factory
-from app.jobs.queue import JobContext, register_handler
+from app.jobs.queue import JobContext
+from app.modules.task_manager.tracker import register_tracked_handler
 
 logger = get_logger(__name__)
 
@@ -76,5 +77,5 @@ async def run_inbox_poll_all(context: JobContext, payload: dict[str, Any]) -> di
 
 #: Registered at import time. ``app.modules.email_manager`` is imported by ``app.api.router``, so
 #: these exist before any request can enqueue them.
-register_handler("inbox.cleanup", run_inbox_cleanup)
-register_handler("inbox.poll_all", run_inbox_poll_all)
+register_tracked_handler("inbox.cleanup", run_inbox_cleanup)
+register_tracked_handler("inbox.poll_all", run_inbox_poll_all)
