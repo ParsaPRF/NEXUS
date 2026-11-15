@@ -230,6 +230,29 @@ Deliberately a **pure function** in `MessageService`: given a message body, retu
 codes with confidence. No I/O, no network, trivially unit-testable. The campaign flow only ever
 consumes codes from inboxes it created for that campaign — it never reads a human's mailbox.
 
+### 5.4 Mail ingestion: Mailpit owns SMTP, NEXUS polls (Phase 3)
+
+```mermaid
+sequenceDiagram
+    participant App as Application under test (demo target)
+    participant MP as Mailpit (SMTP sink + mailbox store)
+    participant N as NEXUS
+    participant DB as Database
+
+    App->>MP: SMTP message to qa-…@example.test
+    Note over MP: Mailpit accepts and stores it.<br/>It cannot deliver to the internet.
+    N->>MP: GET /api/v1/search?query=to:qa-…@example.test
+    MP-->>N: message ids
+    N->>MP: GET /api/v1/message/{id}
+    MP-->>N: sender, subject, text, html
+    N->>N: extract verification code (pure function)
+    N->>DB: INSERT message (unique on inbox_id + backend id)
+```
+
+NEXUS does **not** listen for SMTP itself: Mailpit already owns the port and the store, and a
+second implementation would create two sources of truth (decision D14). Ingestion is idempotent,
+so polling is safe at any frequency, and the campaign runner polls the same way.
+
 ---
 
 ## 6. Import-direction rules (the boundary enforcement)

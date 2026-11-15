@@ -1,7 +1,7 @@
 # NEXUS — API Reference
 
 **Base URL:** `http://127.0.0.1:8000`
-**Version:** 0.1.0 (Phases 1–2)
+**Version:** 0.1.0 (Phases 1–3)
 **Interactive docs:** `/docs` (Swagger UI) · `/redoc` · `/openapi.json`
 
 > This document covers **what exists today**. Endpoints planned for later phases are listed at
@@ -393,17 +393,178 @@ The job checks in chunks, reports progress and honours cancellation between chun
 
 ---
 
+## 3.6 Email Manager (Phase 3)
+
+Disposable test inboxes on a domain the owner controls, backed by Mailpit (or an in-memory
+backend in tests).
+
+**Safety notes**
+
+- Inboxes are only created on **RFC-reserved domains** (`example.test` and friends) or on a
+  domain the operator has explicitly marked `owner_verified`. A non-reserved domain fails closed
+  with `403 email_domain_not_allowed`.
+- NEXUS never creates a mailbox on Gmail, Outlook or any other third-party provider. There is one
+  backend adapter for the local mail infrastructure and no code path to a third party.
+- `body_html` is **untrusted input**. It is stored for extraction and debugging; a client must
+  never render it as markup.
+- Ingestion is idempotent: polling twice returns `ingested: 0`.
+- Expiry is a status change, not a deletion: messages stay until the inbox is deleted.
+
+---
+
+### `GET /api/v1/email-domains` — list domains
+
+```json
+[
+  {
+    "id": 1, "domain": "example.test", "is_reserved": true, "owner_verified": false,
+    "is_active": true, "description": "Default RFC-reserved test domain", "inbox_count": 3
+  }
+]
+```
+
+The default domain is created on demand the first time an inbox is made.
+
+---
+
+### `POST /api/v1/email-domains` — register a domain
+
+```json
+{ "domain": "staging.example.org", "owner_verified": true, "description": "QA staging" }
+```
+
+`201` on success · `403 email_domain_not_allowed` when the domain is not RFC-reserved and
+`owner_verified` is not `true` · `409` when already registered · `422` for a malformed domain.
+
+---
+
+### `GET /api/v1/inboxes` — list inboxes
+
+Query: `status` (repeatable), `campaign_id`, `search`, `expiring_only`, `limit` (1–500),
+`offset`. Returns `{ items, meta }` with the standard pagination envelope.
+
+---
+
+### `POST /api/v1/inboxes` — create one inbox
+
+```json
+{ "label": "manual-qa", "ttl_hours": 6, "local_part": "optional-fixed-alias" }
+```
+
+**Response `201`**
+
+```json
+{
+  "public_id": "0e5b…", "address": "qa-3f9a2b7c1d4e@example.test",
+  "local_part": "qa-3f9a2b7c1d4e", "domain": "example.test", "label": "manual-qa",
+  "status": "active", "message_count": 0, "last_message_at": null,
+  "expires_at": "2026-11-16T04:39:00Z", "campaign_id": null,
+  "created_at": "2026-11-15T22:39:00Z"
+}
+```
+
+`409` if a requested alias is taken · `422` for an invalid alias · `403` if the configured domain
+is not usable.
+
+---
+
+### `POST /api/v1/inboxes/bulk` — create several inboxes
+
+```json
+{ "count": 25, "label_prefix": "campaign-7", "ttl_hours": 24 }
+```
+
+**Response `201`**: `{ "created": 25, "inboxes": [ … ] }`
+
+Capped by `NEXUS_MAIL__MAX_BULK_INBOXES` (default 100); a larger request is `422`. The cap is a
+safety limit, not a performance knob: bulk creation is for test setup, not for generating
+mailboxes at scale.
+
+---
+
+### `POST /api/v1/inboxes/cleanup` — expire overdue inboxes
+
+**Response `200`**: `{ "expired": 2 }`
+
+The same sweep runs as the `inbox.cleanup` background job; this endpoint exists so the behaviour
+can be triggered and observed directly.
+
+---
+
+### `GET /api/v1/inboxes/{public_id}` — one inbox
+
+`200` with an inbox, or `404 not_found`.
+
+---
+
+### `DELETE /api/v1/inboxes/{public_id}` — delete an inbox
+
+`204`. Deletes the inbox and every message it received (cascade).
+
+---
+
+### `POST /api/v1/inboxes/{public_id}/poll` — ingest new messages
+
+No request body. NEXUS asks the configured backend for messages addressed to this inbox and
+stores the new ones.
+
+**Response `200`**
+
+```json
+{ "inbox": "qa-3f9a…@example.test", "ingested": 1, "skipped": 0, "already_known": 0 }
+```
+
+`skipped` counts messages ignored because they were addressed to another inbox, oversized, or no
+longer present in the backend.
+
+---
+
+### `GET /api/v1/inboxes/{public_id}/messages` — list messages
+
+Query: `search` (subject, sender, body), `limit` (1–200), `offset`. Bodies are omitted from list
+items; `extracted_code` and `extraction_confidence` are included.
+
+---
+
+### `GET /api/v1/inboxes/{public_id}/export` — export messages
+
+`format=csv|json` (default `csv`), `limit` (1–5000). Returns a download.
+
+---
+
+### `GET /api/v1/messages/{message_id}` — one message
+
+Adds `body_text`, `body_html` and selected `headers` to the list shape.
+
+`body_html` is untrusted; render as plain text only.
+
+---
+
+### `POST /api/v1/messages/{message_id}/extract-code` — re-run extraction
+
+```json
+{
+  "message_id": 1, "code": "481920", "confidence": 0.9, "strategy": "labelled:text",
+  "candidates": [
+    { "code": "481920", "confidence": 0.9, "strategy": "labelled:text" },
+    { "code": "481920", "confidence": 0.45, "strategy": "standalone:text" }
+  ]
+}
+```
+
+Useful after extraction rules improve, and for diagnosing a message whose code was missed.
+
+**Extraction confidence bands:** labelled `0.9` · digit-separated `0.8` · digits near a label
+`0.65` · standalone six digits `0.45`. A caller that needs certainty should require `>= 0.7`.
+
+---
+
 ## 4. Planned endpoints (NOT implemented — later phases)
 
 Listed so the design is visible; none of these respond today.
 
 | Phase | Endpoint | Purpose |
 |---|---|---|
-| 3 | `POST /api/v1/inboxes` | create a test inbox |
-| 3 | `POST /api/v1/inboxes/bulk` | create many |
-| 3 | `GET /api/v1/inboxes/{id}/messages` | list messages |
-| 3 | `GET /api/v1/messages/{id}` | message detail |
-| 3 | `POST /api/v1/messages/{id}/extract-code` | run code extraction |
 | 4 | `GET /api/v1/targets` | list authorized targets |
 | 4 | `POST /api/v1/targets` | register a target (requires authorization note) |
 | 4 | `POST /api/v1/campaigns` | create and enqueue a campaign |

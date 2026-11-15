@@ -17,17 +17,18 @@ registration testing against applications you own.**
 | 0 | Discovery, architecture, database design, roadmap | ✅ complete |
 | 1 | Project foundation: config, logging, security, schema, API skeleton, tests | ✅ complete |
 | 2 | Proxy Manager: import, normalize, validate, monitor, export | ✅ complete |
-| 3 | Email Manager (Mailpit) | ⬜ not started |
+| 3 | Email Manager: Mailpit backend, test inboxes, message API, code extraction, expiry | ✅ complete |
 | 4 | Registration Lab + bundled demo target | ⬜ not started |
 | 5 | Task Manager (Redis/RQ) | ⬜ not started |
 | 6 | PySide6 desktop UI | ⬜ not started |
 | 7 | Finalization, Docker verification | ⬜ not started |
 
 **What actually works today:** the backend starts, migrates its schema, authenticates API
-requests, logs with mandatory secret redaction, validates outbound URLs against SSRF, and
-manages proxies end to end - import a TXT/CSV list, de-duplicate it, filter and sort the pool,
-run single or batch health checks against an endpoint you configure, watch the expiry policy
-apply, and export to CSV/JSON. There is **no** inbox creation, registration execution or GUI yet.
+requests, logs with mandatory secret redaction, validates outbound URLs against SSRF, manages
+proxies end to end (import, de-duplicate, filter, check, expire, export), and runs disposable
+test inboxes: create inboxes on an RFC-reserved domain, poll Mailpit (or the in-memory backend)
+for mail, extract verification codes, search and export messages, and expire inboxes on a TTL.
+There is **no** registration execution or GUI yet.
 
 ---
 
@@ -97,7 +98,7 @@ uv run ruff check .           # lint
 uv run ruff format --check .  # formatting
 ```
 
-Current baseline: **415 passing**, `ruff` clean.
+Current baseline: **534 passing**, `ruff` clean.
 
 ---
 

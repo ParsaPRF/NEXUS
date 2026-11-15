@@ -165,6 +165,20 @@ async def _clean_queue() -> AsyncIterator[None]:
     await reset_queue()
 
 
+@pytest.fixture(autouse=True)
+def _clean_mail_backend() -> Iterator[None]:
+    """Reset the mail backend between tests.
+
+    The in-memory backend is a process-wide singleton, so without this a message delivered in one
+    test would be visible in the next - and a test that passes alone would fail in a suite.
+    """
+    from app.modules.email_manager.backends import reset_backend
+
+    reset_backend()
+    yield
+    reset_backend()
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Skip ``e2e`` tests unless they were explicitly requested with ``-m e2e``.
 

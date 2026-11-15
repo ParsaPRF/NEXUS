@@ -84,16 +84,6 @@ class ImportFileError(ValidationError):
     message = "The import file could not be processed."
 
 
-class EmailDomainNotAllowedError(ValidationError):
-    """A configured mail domain is neither RFC-reserved nor owner-verified."""
-
-    code = "email_domain_not_allowed"
-    message = (
-        "Only RFC-reserved test domains (example.test and friends) or explicitly "
-        "owner-verified domains may be used for test inboxes."
-    )
-
-
 # --------------------------------------------------------------------------------------
 # 403 - understood, but refused by policy (these are the safety controls)
 # --------------------------------------------------------------------------------------
@@ -134,6 +124,21 @@ class CredentialsNotStorableError(PolicyViolationError):
     message = (
         "Proxy credentials cannot be stored because NEXUS_PROXY_CREDENTIAL_KEY is not "
         "configured. Set the key or import the proxy without credentials."
+    )
+
+
+class EmailDomainNotAllowedError(PolicyViolationError):
+    """A mail domain is neither RFC-reserved nor explicitly owner-verified.
+
+    This is a policy refusal, not a syntax error: the domain may be perfectly well formed, but
+    NEXUS will not host test inboxes on a domain the operator has not shown they control
+    (docs/SECURITY.md 3).
+    """
+
+    code = "email_domain_not_allowed"
+    message = (
+        "Only RFC-reserved test domains (example.test and friends) or explicitly "
+        "owner-verified domains may be used for test inboxes."
     )
 
 

@@ -133,6 +133,29 @@ class MailSettings(BaseSettings):
         default="example.test",
         description="RFC 2606/6761 reserved domain used for generated test inbox addresses.",
     )
+    default_ttl_hours: int = Field(
+        default=24,
+        ge=1,
+        le=8760,
+        description="Default lifetime of a test inbox, after which it expires.",
+    )
+    max_bulk_inboxes: int = Field(
+        default=100,
+        ge=1,
+        le=500,
+        description="Maximum inboxes one bulk-create request may produce.",
+    )
+    max_messages_per_poll: int = Field(
+        default=100,
+        ge=1,
+        le=1000,
+        description="Maximum new messages ingested per inbox per poll.",
+    )
+    max_message_bytes: int = Field(
+        default=1_048_576,
+        ge=1024,
+        description="Largest message body accepted from the mail backend (threat T7).",
+    )
 
 
 class JobSettings(BaseSettings):

@@ -229,3 +229,22 @@ per decision, newest last.
 - **Consequences:** (+) Every failure mode is testable in milliseconds with no network.
   (−) The seam bypasses proxy routing, so it tests *classification*, not proxy plumbing; proxy
   URL construction is covered separately by `TestProxyUrlBuilding`.
+
+---
+
+## D14 — Mailpit owns SMTP; NEXUS polls it
+
+- **Status:** Accepted (Phase 3)
+- **Context:** Test inboxes need to receive mail. Two shapes were possible: (a) NEXUS runs its own
+  SMTP listener and stores messages itself, or (b) Mailpit receives SMTP and NEXUS reads it.
+- **Decision:** Mailpit owns the SMTP port and the mailbox store; NEXUS reads messages through
+  its HTTP API, on demand (``POST /inboxes/{id}/poll``) or via the ``inbox.poll_all`` job.
+- **Alternatives rejected:**
+  - *Own SMTP listener* — duplicates Mailpit's job, creates two stores of truth, and means
+    re-implementing MIME parsing and storage limits. Mailpit already does both well.
+  - *Mailpit webhooks* — would require NEXUS to accept inbound pushes, adding an authenticated
+    listener and a retry/idempotency story for no benefit at this scale.
+- **Consequences:** (+) One source of truth for received mail; ingestion is idempotent and
+  explicitly timed, which is what the tests want. (+) The in-memory backend implements the same
+  protocol, so the whole module is testable with no container. (−) Delivery is not instantaneous;
+  a poll interval bounds it. Acceptable for QA flows, where the runner polls anyway.

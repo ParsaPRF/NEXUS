@@ -14,7 +14,7 @@ Legend: ✅ done · 🔄 in progress · ⬜ not started · 🚫 blocked by envir
 | 0 | Discovery & Architecture | ✅ complete | This document set (`docs/`) |
 | 1 | Project Foundation | ✅ complete | Runnable, tested backend skeleton |
 | 2 | Proxy Manager | ✅ complete | Import → normalize → validate → monitor → export |
-| 3 | Email Manager | ⬜ | Mailpit + test inboxes + message API |
+| 3 | Email Manager | ✅ complete | Mailpit backend, test inboxes, message API, code extraction, expiry |
 | 4 | Registration Lab | ⬜ | Demo target + adapters + verification E2E |
 | 5 | Task Manager | ⬜ | Redis/RQ jobs, progress, cancellation, reports |
 | 6 | Desktop UI | ⬜ | Polished dark PySide6 client |
@@ -112,22 +112,40 @@ to registration (forbidden by design — there is no proxy parameter in the regi
 
 ---
 
-## Phase 3 — Email Manager ⬜
+## Phase 3 — Email Manager ✅
 
-| # | Task |
-|---|---|
-| 3.1 | Compose Mailpit; SMTP + HTTP API config |
-| 3.2 | `MailBackend` protocol + `MailpitBackend` + `InMemoryBackend` (tests) |
-| 3.3 | `email_domains` seed: `example.test`, reserved-only guard |
-| 3.4 | Inbox creation: single + bulk, random aliases, collision-safe |
-| 3.5 | SMTP receipt + idempotent ingestion (`UNIQUE(inbox_id, backend_message_id)`) |
-| 3.6 | Message API: list, filter, search, detail; HTML stored but never rendered |
-| 3.7 | Verification-code extraction as a pure, fully-tested function |
-| 3.8 | Expiration + cleanup job; JSON/CSV export |
-| 3.9 | Tests: extraction corpus, idempotent ingestion, expiry |
+**Goal:** disposable test inboxes on a domain the owner controls, with mail ingestion and code
+extraction — and no path to a third-party mailbox provider.
 
-**Exit criteria:** create inbox → send SMTP message directly to Mailpit → message visible via
-API → code extracted → inbox expires and is cleaned up.
+**Delivered:**
+
+| # | Task | Where |
+|---|---|---|
+| 3.1 | Mailpit settings + Compose service (already declared in Phase 1) | `core/config.py`, `docker-compose.yml` |
+| 3.2 | `MailBackend` protocol + `MailpitBackend` + `InMemoryMailBackend` | `modules/email_manager/backends.py` |
+| 3.3 | `email_domains` guard: RFC-reserved or explicitly owner-verified only | `service.create_domain`, `_default_domain` |
+| 3.4 | Inbox creation: single + bulk, random aliases, collision-safe, TTL | `service.create_inbox`, `bulk_create_inboxes` |
+| 3.5 | Idempotent ingestion keyed on `(inbox_id, backend_message_id)` | `service._ingest` |
+| 3.6 | Message API: list, search, detail; HTML stored but never rendered | `router.py` |
+| 3.7 | Verification-code extraction as a pure, corpus-tested function | `extraction.py` |
+| 3.8 | Expiry sweep (endpoint + job), CSV/JSON export | `service.cleanup_expired`, `export_messages` |
+| 3.9 | 119 new tests | `tests/unit/`, `tests/integration/` |
+
+**Exit criteria — verified by execution:**
+- create inbox → deliver a message to the backend → poll → message visible with the code
+  extracted → export → expire: covered by `tests/integration/test_email_api.py` (53 tests).
+- extraction: 41 tests over labelled codes, separated digits, HTML-only bodies, and cases that
+  must *not* match (years, long numbers, placeholders).
+- backends: 25 tests, including Mailpit JSON parsing via an injected transport and oversized
+  message rejection.
+- `uv run pytest` → 534 passed; `ruff check` clean.
+
+**Safety properties proven by tests:** every generated address is on `example.test`; a
+non-reserved configured domain fails closed (403); a message addressed to another inbox is
+refused; polling twice does not duplicate; expiry keeps messages rather than deleting them.
+
+**Not done on purpose:** SMTP listening inside NEXUS (Mailpit owns it — decision D14) and history
+pruning (Phase 5).
 
 ---
 
