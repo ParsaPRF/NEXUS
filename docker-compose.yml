@@ -1,0 +1,194 @@
+# =====================================================================================
+# NEXUS - local infrastructure stack
+# =====================================================================================
+# STATUS: authored in Phase 1, NOT yet verified on this machine.
+#
+# The Docker daemon was not running during Phase 0/1 (see docs/TECHNICAL_ASSESSMENT.md R2),
+# so this file has been syntax-checked but never actually started. Treat it as unverified
+# until Phase 7 runs it end to end. Phase 1 needs none of it: the local profile uses SQLite,
+# an in-process job runner and an in-memory mail backend.
+#
+# Usage:
+#   docker compose up -d
+#   docker compose ps
+#   docker compose logs -f api
+#   docker compose down            # keep data
+#   docker compose down -v         # DELETE all data
+#
+# Then apply migrations:
+#   docker compose exec api alembic upgrade head
+# =====================================================================================
+
+name: nexus
+
+services:
+  # -----------------------------------------------------------------------------------
+  # PostgreSQL - the production-shaped database
+  # -----------------------------------------------------------------------------------
+  db:
+    image: postgres:17-alpine
+    container_name: nexus-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexus}
+      POSTGRES_DB: nexus
+      # Deterministic collation: avoids index differences between machines.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      # Bound to loopback only. Publishing on 0.0.0.0 would put the database on the local
+      # network, which is never what this project wants (docs/SECURITY.md T9).
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - nexus_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `api` waits for this, so the API never starts against a database that is still booting.
+      test: ["CMD-SHELL", "pg_isready -U nexus -d nexus"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - nexus_net
+
+  # -----------------------------------------------------------------------------------
+  # Redis - backing store for the RQ job queue (Phase 5)
+  # -----------------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: nexus-redis
+    restart: unless-stopped
+    # No persistence: job state lives in PostgreSQL. A queue that survives a crash is a
+    # Phase 5 concern handled by the idempotency key, not by duplicating state in Redis.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - nexus_net
+
+  # -----------------------------------------------------------------------------------
+  # Mailpit - the ONLY mail backend NEXUS talks to
+  # -----------------------------------------------------------------------------------
+  # Mailpit is a local SMTP sink with a web UI. It cannot deliver mail to the outside world,
+  # which is exactly why it is the right backend for disposable test inboxes: NEXUS never
+  # creates mailboxes on a third-party provider (docs/SECURITY.md 3).
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: nexus-mailpit
+    restart: unless-stopped
+    environment:
+      # 1 MiB cap: an oversized message is a denial-of-service vector (threat T7).
+      MP_MAX_MESSAGE_SIZE: 1048576
+      MP_SMTP_AUTH_ACCEPT_ANY: 0
+      MP_SMTP_AUTH_ALLOW_INSECURE: 0
+    ports:
+      - "127.0.0.1:1025:1025" # SMTP
+      - "127.0.0.1:8025:8025" # HTTP API + web UI
+    networks:
+      - nexus_net
+
+  # -----------------------------------------------------------------------------------
+  # NEXUS API
+  # -----------------------------------------------------------------------------------
+  api:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile
+    container_name: nexus-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Compose overrides win over .env, so the container reaches services by name rather than
+      # through the host's published ports.
+      NEXUS_PROFILE: docker
+      NEXUS_API__HOST: 0.0.0.0
+      NEXUS_DATABASE__URL: postgresql+asyncpg://nexus:${POSTGRES_PASSWORD:-nexus}@db:5432/nexus
+      NEXUS_JOBS__BACKEND: rq
+      NEXUS_JOBS__REDIS_URL: redis://redis:6379/0
+      NEXUS_MAIL__BACKEND: mailpit
+      NEXUS_MAIL__SMTP_HOST: mailpit
+      NEXUS_MAIL__API_URL: http://mailpit:8025
+    ports:
+      # Loopback only by default. This is a local-first tool, not a hosted service.
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # Mounted so the SQLite fallback and imported files have a persistent home.
+      - nexus_data:/app/data
+      - ./docs:/app/docs:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    command:
+      - sh
+      - -c
+      - "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - nexus_net
+
+  # -----------------------------------------------------------------------------------
+  # RQ worker - executes queued jobs (Phase 5)
+  # -----------------------------------------------------------------------------------
+  worker:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile
+    container_name: nexus-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NEXUS_PROFILE: docker
+      NEXUS_DATABASE__URL: postgresql+asyncpg://nexus:${POSTGRES_PASSWORD:-nexus}@db:5432/nexus
+      NEXUS_JOBS__BACKEND: rq
+      NEXUS_JOBS__REDIS_URL: redis://redis:6379/0
+      NEXUS_MAIL__BACKEND: mailpit
+      NEXUS_MAIL__SMTP_HOST: mailpit
+      NEXUS_MAIL__API_URL: http://mailpit:8025
+    volumes:
+      - nexus_data:/app/data
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    # PHASE 5: replace with the real worker entry point:
+    #   command: ["python", "-m", "app.workers.main"]
+    # It currently idles so `docker compose up` stays healthy while the worker is unimplemented,
+    # rather than crash-looping and hiding real errors in noise.
+    command:
+      - sh
+      - -c
+      - 'echo "NEXUS worker is not implemented until Phase 5 (see docs/ROADMAP.md)"; exec sleep infinity'
+    networks:
+      - nexus_net
+
+volumes:
+  nexus_pgdata:
+    name: nexus_pgdata
+  nexus_data:
+    name: nexus_data
+
+networks:
+  nexus_net:
+    name: nexus_net
+    driver: bridge

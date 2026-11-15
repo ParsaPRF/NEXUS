@@ -1,0 +1,80 @@
+# ---------------------------------------------------------------------------------------
+# NEXUS - files that must never be committed
+# ---------------------------------------------------------------------------------------
+
+# --- Secrets ---------------------------------------------------------------------------
+# Only .env.example belongs in git. A committed secret is compromised permanently: the value
+# stays in history even after the file is deleted.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+secrets/
+
+# --- Databases -------------------------------------------------------------------------
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+
+# --- Local logs ------------------------------------------------------------------------
+logs/
+*.log
+
+# --- Python ----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --- Virtual environments --------------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+
+# --- Tooling caches --------------------------------------------------------------------
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+
+# pytest's temporary directories, which land in the working directory on some setups
+pytest-of-*/
+tmp*/
+
+# --- Playwright ------------------------------------------------------------------------
+# Browser binaries and traces are large; only the test code belongs in git.
+.playwright/
+test-results/
+playwright-report/
+
+# --- Editors ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS --------------------------------------------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# --- Build artefacts -------------------------------------------------------------------
+# PyInstaller output for the desktop application.
+desktop/build/
+desktop/dist/
