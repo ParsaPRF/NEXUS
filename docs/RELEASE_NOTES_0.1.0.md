@@ -19,12 +19,18 @@ target.
 ## The Windows build
 
 ```
-NEXUS-0.1.0-win64.zip   (49.5 MB compressed, 121.3 MB unpacked, 215 files)
+NEXUS-0.1.0-win64.zip   (49.5 MB compressed, ~121 MB unpacked, 218 files)
   NEXUS.exe
+  START-NEXUS.cmd       double-click launcher (put your API key in it once)
+  README-FA.md          Persian quick-start written for the project owner
   _internal\...
 ```
 
 No Python installation is required on the target machine.
+
+> The Persian guide is shipped **with the application**, not in `docs/`, because the repository's
+> documentation is English by project rule ([DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) §11). It is
+> written for the person using the tool, not for a developer reading the code.
 
 ### Install
 
@@ -32,8 +38,9 @@ No Python installation is required on the target machine.
    Do not run it from inside the zip: Windows would unpack to a temporary folder on every launch.
 2. Start the **backend** first — the client is a pure API consumer and has nothing to show without
    it. See `docs/DEPLOYMENT.md` §1.
-3. Point the client at the backend and give it the key (see below).
-4. Run `NEXUS.exe`.
+3. Open `START-NEXUS.cmd` in Notepad once and set `NEXUS_DESKTOP_API_KEY` to your key. After that,
+   double-clicking it is all you need.
+4. Run `START-NEXUS.cmd` (or `NEXUS.exe`).
 
 ### Configure the client
 
@@ -54,7 +61,7 @@ type them every time:
 ### Verify the download
 
 ```
-SHA256: 45002768D5B05EA687EF8692EA06A08765CB17BEEAD728562564A84E0D41EE20
+SHA256: 9ADE2B2D71D4FD3B9C9D7EACB881DFE0842C8EA288F39812EE39EE20DE7CD769
 ```
 
 ```powershell

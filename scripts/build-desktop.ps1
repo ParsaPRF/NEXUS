@@ -137,6 +137,18 @@ try {
     if (-not (Test-Path $publishedExe)) { throw "Published executable missing at $publishedExe" }
     Write-Host "      published: $publishedExe" -ForegroundColor Green
 
+    # Ship the human-facing extras with the application: the Persian quick-start (written for the
+    # project owner, not for the repository, whose documentation is English) and a double-click
+    # launcher. Copying them from the repository keeps one source of truth; editing them by hand in
+    # the output folder would be lost on the next build.
+    $extras = Join-Path $desktopDir "packaging"
+    if (Test-Path $extras) {
+        $extraTarget = Join-Path $publishDist "NEXUS"
+        Copy-Item (Join-Path $extras "*") $extraTarget -Force
+        $shipped = (Get-ChildItem $extras -File | ForEach-Object { $_.Name }) -join ", "
+        Write-Host "      extras   : $shipped" -ForegroundColor Green
+    }
+
     if ($SkipSelfCheck) {
         Write-Host "`n[5/5] Self-check skipped (-SkipSelfCheck)." -ForegroundColor Yellow
         # Exit explicitly: a script invoked with '&' or 'pwsh -File' does not set $LASTEXITCODE for
