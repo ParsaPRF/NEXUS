@@ -17,8 +17,8 @@ Legend: ✅ done · 🔄 in progress · ⬜ not started · 🚫 blocked by envir
 | 3 | Email Manager | ✅ complete | Mailpit backend, test inboxes, message API, code extraction, expiry |
 | 4 | Registration Lab | ✅ complete | Demo target + adapters + verification E2E |
 | 5 | Task Manager | ✅ complete | Durable jobs, monitor, cancellation, analytics, RQ backend |
-| 6 | Desktop UI | ⬜ | Polished dark PySide6 client |
-| 7 | Finalization | ⬜ | Full suite, security review, Docker verification, docs |
+| 6 | Desktop UI | ✅ complete | Dark PySide6 client, packaged and verified as a Windows executable |
+| 7 | Finalization | ⚠️ complete except Docker verification | Security review, packaging, release docs; one item blocked by the build machine's Docker install |
 
 ---
 

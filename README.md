@@ -21,7 +21,7 @@ registration testing against applications you own.**
 | 4 | Registration Lab + bundled demo target | ✅ complete |
 | 5 | Task Manager: durable jobs, monitor, analytics, RQ backend | ✅ complete |
 | 6 | PySide6 desktop UI: dashboard, all module views, task monitor | ✅ complete |
-| 7 | Finalization, Docker verification | ⬜ not started |
+| 7 | Finalization: security review, packaging, docs | ⚠️ complete except one blocked item (Docker engine on the build machine — see [DOCKER_RECOVERY.md](docs/DOCKER_RECOVERY.md)) |
 
 **What actually works today:** the backend starts, migrates its schema, authenticates API
 requests, logs with mandatory secret redaction, validates outbound URLs against SSRF, manages

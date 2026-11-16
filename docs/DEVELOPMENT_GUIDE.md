@@ -135,6 +135,22 @@ uv run ruff format --check . # verify formatting without changing files
 Ruff is configured in `pyproject.toml` with a 100-character line limit and a rule set chosen to
 catch real bugs (`B` bugbear, `SIM` simplify, `ASYNC`, `RET`, `PTH`) rather than to enforce taste.
 
+## 5.1 Documentation consistency
+
+The project status is stated in three places: the README table, the roadmap table, and each phase's
+own heading. They drifted twice during development — the detailed section recorded a phase as
+complete while the summary table still said "not started", which is what a reader sees first.
+
+```powershell
+cd NEXUS
+uv run --project backend python scripts/check_docs.py
+```
+
+It reports any phase whose summary disagrees with its section, a heading with no status marker, or a
+missing row, and exits non-zero. `tests/unit/test_docs_checker.py` feeds it deliberately broken
+documents to prove the check actually fails when it should — a checker that always passes is worse
+than no checker. **Run it after editing the roadmap or the README status table.**
+
 ---
 
 ## 6. Migrations (Alembic)
