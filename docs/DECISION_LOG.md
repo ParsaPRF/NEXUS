@@ -380,3 +380,35 @@ per decision, newest last.
 - **Consequences:** (+) Columns are declared once per view and cannot drift from the API without a
   test noticing. (+) The whole UI is testable headlessly. (−) Status colouring is opt-in per column
   via ``colorize=True``, so a new status column must ask for it.
+
+---
+
+## D22 — Desktop packaging: onedir, pruned Qt, build-then-publish, self-check
+
+- **Status:** Accepted (Phase 7)
+- **Context:** The client needs to be deliverable as an executable, and a Qt bundle is large.
+- **Decisions:**
+  1. **onedir, not onefile.** Onefile unpacks all of Qt into a temporary directory on every launch:
+     slow, and painful to diagnose. onedir starts immediately and shows what was bundled.
+  2. **Prune unused Qt modules.** PySide6 ships WebEngine, Quick/QML, 3D, Charts, Multimedia and
+     more; this application uses QtCore/QtGui/QtWidgets only. They are excluded in
+     ``desktop/nexus.spec``.
+  3. **Build in the workspace, publish elsewhere.** The project interpreter can write only inside
+     the workspace on this machine, so a direct build onto another drive fails with a
+     ``PermissionError`` from inside PyInstaller that looks like a project bug. The script builds in
+     ``build-output/`` and copies the result to ``-OutputRoot`` (default: first roomy non-system
+     drive).
+  4. **A ``--self-check`` mode in the application itself.** A packaged Qt app can fail only at run
+     time (platform plugins, missing binaries), so the executable can exercise itself: build every
+     page, probe the API, write a JSON report, exit 0/1. The build script runs exactly that against
+     the published artifact, which is how the build was verified rather than assumed.
+- **Consequences:** (+) The published build is proven to start, render every page and reach the API.
+  (+) 121 MB instead of several hundred. (−) The exclusion list needs revisiting if a future view
+  imports another Qt module; the self-check would catch it immediately.
+
+### Two environment traps recorded because they cost real time
+
+| Symptom | Cause | Resolution |
+|---|---|---|
+| `PermissionError: [WinError 5]` from `os.makedirs` deep inside PyInstaller | The venv's interpreter is denied writes outside the workspace on this machine; system Python and cmd/PowerShell are not | build in the workspace, publish with `robocopy` |
+| A healthy windowed build reported exit code 1 | The PowerShell **call operator does not set `$LASTEXITCODE` for a GUI-subsystem executable**; the script read a stale value. Merging a build tool's stderr under ``$ErrorActionPreference='Stop'`` is a second, related trap | measure with `Start-Process -Wait -PassThru` and read `.ExitCode`; capture tool output to a log and check exit codes explicitly |

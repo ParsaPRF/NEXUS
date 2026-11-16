@@ -75,6 +75,8 @@ desktop.ini
 .DS_Store
 
 # --- Build artefacts -------------------------------------------------------------------
-# PyInstaller output for the desktop application.
+# PyInstaller output for the desktop application. Where the *published* copy goes is chosen with
+# scripts/build-desktop.ps1 (another drive by default); this is the intermediate directory.
 desktop/build/
 desktop/dist/
+build-output/

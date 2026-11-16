@@ -72,12 +72,30 @@ starts expecting a field the API does not send - the drift a desktop client is m
 Qt needs a platform plugin; the tests force `offscreen` in `tests/conftest.py` before importing
 Qt, so they run on a headless machine and in CI.
 
+## Packaging
+
+```powershell
+# from the repository root
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force   # if Windows blocks the script
+& .\scripts\build-desktop.ps1                     # publishes to the first roomy non-system drive
+& .\scripts\build-desktop.ps1 -OutputRoot "G:\NEXUS-build"
+```
+
+The script runs the tests first, builds with PyInstaller, publishes the application folder, and then
+**verifies the published executable**: it runs `NEXUS.exe --self-check <report>` against a running
+backend and fails if the app does not start, build every page and reach the API. See
+[DEPLOYMENT.md](../docs/DEPLOYMENT.md) §6 for the options and the two PowerShell traps it handles.
+
+`nexus.spec` builds **onedir** and prunes the Qt modules this application does not use
+(WebEngine, Quick/QML, 3D, Charts, Multimedia). Result: ~120 MB, no Python needed on the target.
+
 ## Limitations (stated plainly)
 
-* **No packaging yet.** `uv run python -m app.main` is the way to start it; an installer/PyInstaller
-  build belongs to Phase 7 together with a decision about where exports are saved.
-* **Exports are reported, not saved.** The client reports the row count from the API; a save
-  dialog needs the packaging decision above (and a file dialog is painful to test headlessly).
+* **No installer yet.** The build produces a folder; an MSI/Inno Setup installer is packaging
+  polish rather than capability, and it was left unwritten rather than half-written. The executable
+  is also unsigned, so SmartScreen warns on first run.
+* **Exports are reported, not saved.** The client reports the row count from the API; a save dialog
+  needs the packaging decision above (and a file dialog is painful to test headlessly).
 * **The Task Monitor polls** every 2 seconds while it is the visible page. Polling a hidden page
   would be wasted work, so the timer is stopped when you navigate away.
 * **HTML email bodies are never rendered** - they are shown as a notice. An email body is

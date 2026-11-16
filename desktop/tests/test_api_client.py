@@ -220,6 +220,40 @@ class TestConfiguration:
         assert DesktopConfig.from_environment().verify_tls is False
 
 
+class TestSelfCheckArguments:
+    """The ``--self-check`` plumbing used to verify a packaged build.
+
+    A PyInstaller bundle can only be trusted after it has actually been started, so the executable
+    carries a self-check mode; these tests pin its argument handling without needing a bundle.
+    """
+
+    def test_no_flag_means_no_report_path(self) -> None:
+        from app.main import _report_path
+
+        assert _report_path([]) is None
+        assert _report_path(["--other"]) is None
+
+    def test_default_report_path(self) -> None:
+        from app.main import _report_path
+
+        assert str(_report_path(["--self-check"])) == "nexus-selfcheck.json"
+
+    def test_explicit_report_path(self) -> None:
+        from pathlib import Path
+
+        from app.main import _report_path
+
+        # Compare Path objects: on Windows the separator is normalised, so comparing strings
+        # would fail for a reason that has nothing to do with the behaviour under test.
+        assert _report_path(["--self-check", "E:/out/report.json"]) == Path("E:/out/report.json")
+
+    def test_flag_with_a_following_option_uses_the_default(self) -> None:
+        # ``--self-check --verbose`` must not treat ``--verbose`` as a filename.
+        from app.main import _report_path
+
+        assert str(_report_path(["--self-check", "--console"])) == "nexus-selfcheck.json"
+
+
 class TestApiErrorRendering:
     """The error object renders usefully in a status bar."""
 

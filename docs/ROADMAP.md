@@ -277,6 +277,7 @@ settings that could weaken the backend's safety limits from the GUI.
 | 7.3 | Security review | ✅ | `docs/SECURITY_REVIEW.md`: SSRF corpus (54 tests), redaction (36 tests), git-history secret scan, `pip-audit` on both projects |
 | 7.4 | Database integrity and migration reversibility | ✅ | upgrade -> downgrade -> upgrade on a fresh database; `scripts/check_migration.py` reports 14 tables, 50 indexes, 13 foreign keys |
 | 7.5 | Playwright UI adapter | ⏭️ deliberately deferred | the bundled demo target has no HTML UI to drive (D16) |
+| 7.5b | Desktop packaging | ✅ **built and verified** | `scripts/build-desktop.ps1` + `desktop/nexus.spec`; published to `E:\NEXUS-build\dist\NEXUS` (215 files, 121.3 MB); the published `NEXUS.exe --self-check` reported `ok: true`, 7 pages, live API, **exit 0** |
 | 7.6 | Release configuration and documentation | ✅ | `docs/DEPLOYMENT.md`, `docs/USER_GUIDE.md`, acceptance-criteria table in the README, compose worker command replaced with the real entry point |
 | 7.7 | Cold-start check | ✅ (local profile) | fresh database migrated, server started, authenticated request served, test suite green |
 
@@ -317,9 +318,9 @@ item passed - it is evidence that it was skipped. Recorded as F1 in `docs/SECURI
 
 ### Also not done (and why)
 
-* **Desktop packaging.** No PyInstaller spec or installer. `uv run python -m app.main` is the
-  supported way to start the client. A packaged build also needs a decision about where exports are
-  saved, which is why it was left rather than guessed.
+* **An installer (MSI/Inno Setup) and code signing.** The build produces a folder you can copy or
+  zip; an installer is packaging polish rather than capability, and an unsigned binary makes
+  Windows SmartScreen warn on first run. Both are stated as limitations rather than half-built.
 * **Proxy check-history pruning.** Deferred to the retention job noted in Phase 5.
 * **Inbound API rate limiting.** The type exists, the limiter does not; recorded as F3.
 

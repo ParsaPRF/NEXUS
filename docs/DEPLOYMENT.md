@@ -206,11 +206,60 @@ Migrations are the only schema authority; never edit an applied revision.
 
 ---
 
-## 6. What is deliberately not here
+## 6. Building the desktop client as an executable
+
+```powershell
+cd NEXUS
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force   # if Windows blocks the script
+& .\scripts\build-desktop.ps1
+```
+
+The script:
+
+1. installs PyInstaller into the desktop environment (idempotent),
+2. **runs the test suite first** and refuses to package a broken build,
+3. builds with PyInstaller (`desktop/nexus.spec`),
+4. publishes the application to another drive (`-OutputRoot`, default `E:\NEXUS-build`),
+5. runs the published executable's `--self-check` against the running backend and fails the build
+   if it does not start, build every page and reach the API.
+
+| Option | Effect |
+|---|---|
+| `-OutputRoot <path>` | where the finished application is published (default: first non-system drive with room) |
+| `-BuildRoot <path>` | where PyInstaller works (default `<repo>\build-output`) |
+| `-Console` | build a console binary, for diagnosing a start-up failure |
+| `-SkipSelfCheck` | build only |
+
+Result: a self-contained folder (`NEXUS.exe` + `_internal`), about 120 MB, no Python installation
+required on the target machine. Start it with `NEXUS.exe`; configure it with
+`NEXUS_DESKTOP_API_URL` and `NEXUS_DESKTOP_API_KEY` as usual.
+
+### Why two roots
+
+On this machine the project's virtual-environment interpreter can create files **only inside the
+workspace**, while other processes can write anywhere. Building straight onto another drive
+therefore fails deep inside PyInstaller with `PermissionError: [WinError 5]`, which looks like a
+project problem and is not. The script builds in the workspace and publishes the result, so the
+bulky part stays off the system drive and the final artifact still lives where you asked.
+
+### Two PowerShell traps this script handles for you
+
+* **A GUI executable does not set `$LASTEXITCODE`.** Reading it after `& NEXUS.exe …` returns
+  whatever a previous command left behind — which made a healthy windowed build look like a
+  failure. The script uses `Start-Process -Wait -PassThru` and reads `.ExitCode`.
+* **Merging a build tool's stderr can become a terminating error.** PyInstaller and uv write
+  progress to stderr; with `$ErrorActionPreference='Stop'` and stream redirection that turns a
+  successful command into a crash. The script captures their output to a log and checks exit codes
+  explicitly.
+
+---
+
+## 7. What is deliberately not here
 
 * No hosted/cloud deployment recipe. NEXUS is a local-first tool: it asserts ownership of the
   systems it touches, and exposing it publicly would make the target allowlist meaningless.
-* No installer for the desktop client yet. `uv run python -m app.main` is the supported way to
-  start it; packaging (PyInstaller) is listed as remaining work in `docs/ROADMAP.md` Phase 7.
+* No installer (MSI/Inno Setup). The build above produces a folder you can copy or zip; an
+  installer is packaging polish, not capability, and it was not written rather than half-written.
+* No code signing, so Windows SmartScreen will warn on first run of the built executable.
 * No CAPTCHA/anti-bot bypass, no third-party mailbox creation, and no proxy rotation for
   registration — see `docs/SECURITY.md`.
