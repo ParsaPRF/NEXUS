@@ -20,7 +20,7 @@ registration testing against applications you own.**
 | 3 | Email Manager: Mailpit backend, test inboxes, message API, code extraction, expiry | ✅ complete |
 | 4 | Registration Lab + bundled demo target | ✅ complete |
 | 5 | Task Manager: durable jobs, monitor, analytics, RQ backend | ✅ complete |
-| 6 | PySide6 desktop UI | ⬜ not started |
+| 6 | PySide6 desktop UI: dashboard, all module views, task monitor | ✅ complete |
 | 7 | Finalization, Docker verification | ⬜ not started |
 
 **What actually works today:** the backend starts, migrates its schema, authenticates API
@@ -30,8 +30,10 @@ inboxes (create, poll Mailpit, extract codes, search, export, expire), and execu
 campaigns against the bundled demo application: submit → receive the code → verify → confirm the
 account is active, with per-test results and a stop when the target raises a control. Every job is
 tracked durably (status, progress, logs, duration, cancellation) and reported through the job
-monitor and analytics endpoints, with an RQ backend available for the docker profile. There is
-**no** desktop GUI yet.
+monitor and analytics endpoints, with an RQ backend available for the docker profile. A dark
+PySide6 desktop client drives all of it over the same API: dashboard, proxy manager, email
+manager, registration lab, task monitor, settings and logs. Nothing is left unbuilt except the
+final deployment pass (Phase 7).
 
 ---
 
@@ -42,7 +44,7 @@ monitor and analytics endpoints, with an RQ backend available for the docker pro
 | Python | 3.12+ | Developed on 3.14; the Docker image uses 3.13 |
 | uv | any recent | `pip install uv` if missing |
 | Git | any | |
-| Docker Desktop | any | **Only needed from Phase 7.** Phase 1 runs without it. |
+| Docker Desktop | any | **Only needed from Phase 7** (Docker Compose, real Redis/Mailpit). Everything else runs without it. |
 
 ---
 
@@ -91,6 +93,25 @@ curl -H "X-API-Key: <your-api-key>" http://127.0.0.1:8000/api/v1/meta
 
 ---
 
+## Desktop client
+
+With the backend running:
+
+```powershell
+cd NEXUS\desktop
+uv sync
+
+$env:NEXUS_DESKTOP_API_URL = "http://127.0.0.1:8000"
+$env:NEXUS_DESKTOP_API_KEY = "<your-api-key>"      # falls back to NEXUS_API_KEY
+uv run python -m app.main
+```
+
+The client is a **pure API consumer**: it never opens the database and never imports
+`backend/app`. Every call runs on a worker thread and reports back through Qt signals, so the
+window stays responsive while a campaign or a batch check is running.
+
+---
+
 ## Run the tests
 
 ```powershell
@@ -101,7 +122,14 @@ uv run ruff check .           # lint
 uv run ruff format --check .  # formatting
 ```
 
-Current baseline: **654 passing**, `ruff` clean.
+Current baseline: **654 backend tests** and **103 desktop tests**, `ruff` clean in both projects.
+
+```powershell
+cd desktop
+uv sync
+$env:QT_QPA_PLATFORM = "offscreen"   # only needed on a machine without a display
+uv run pytest
+```
 
 ---
 
@@ -122,7 +150,7 @@ NEXUS/
 │   ├── alembic/           migration environment + 0001_initial
 │   ├── scripts/           maintenance helpers
 │   └── tests/             unit/ and integration/
-├── desktop/               (Phase 6) PySide6 client - imports nothing from backend/app
+├── desktop/               PySide6 client - imports nothing from backend/app
 ├── demo_target/           (Phase 4) bundled registration application
 ├── docker/                Dockerfile
 ├── docs/                  architecture, database, security, roadmap, guides

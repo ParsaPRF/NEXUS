@@ -337,3 +337,46 @@ per decision, newest last.
 - **Also recorded:** rq returns a ``Status`` enum; ``str(Status.QUEUED)`` is ``"Status.QUEUED"``,
   so mapping it directly silently produced ``unknown`` for every job. The adapter reads ``.value``
   first, which works across rq versions that return either a string or an enum.
+
+---
+
+## D20 — Desktop: synchronous client on worker threads, never asyncio in the GUI
+
+- **Status:** Accepted (Phase 6)
+- **Context:** Qt owns its own event loop; asyncio owns a different one. Running an asyncio loop in
+  the GUI thread, or making a blocking HTTP call on it, freezes the window.
+- **Decision:** The client uses a **synchronous** ``httpx.Client`` and runs every call on a
+  ``QThreadPool`` worker via ``QRunnable``, reporting results through Qt signals. No asyncio exists
+  anywhere in the desktop project.
+- **Alternatives rejected:**
+  - *async client + ``qasync``* — adds a second event loop and a bridge library, and every Qt
+    callback must then be careful about which loop it is on. Real complexity, no benefit at this
+    request volume.
+  - *threads per call* — the pool already bounds concurrency, which is the property that matters.
+- **Consequences:** (+) The window stays responsive and the threading model is one file. (−) Worker
+  threads must never touch widgets; they emit plain data, and Qt delivers on the GUI thread. That
+  rule is stated at the top of ``app/tasks.py``.
+
+---
+
+## D21 — One dictionary-backed table model, and offscreen Qt tests
+
+- **Status:** Accepted (Phase 6)
+- **Context:** Seven pages need tables; the API returns JSON objects.
+- **Decision:** A single ``DictTableModel`` renders lists of dictionaries, with per-column
+  formatters and status colouring. Views declare columns and nothing else. Qt tests run under the
+  ``offscreen`` platform plugin, forced in ``tests/conftest.py`` before Qt is imported.
+- **Alternatives rejected:** *One model class per table* — seven places to update when a field is
+  renamed, and seven chances for the colour of "healthy" to differ.
+- **Two bugs this arrangement surfaced, both worth remembering:**
+  1. **Widget garbage collection.** Building a panel, returning only its ``QFormLayout`` and
+     reaching for ``parentWidget()`` destroyed the panel: Qt owned the C++ object, Python dropped
+     the last reference, and the next access raised *"Internal C++ object already deleted"*.
+     Widgets need a Python reference, so the constructor now stores the panels it creates.
+  2. **Signals need a spinning event loop.** Tests that called ``wait_for_done`` and then asserted
+     on callbacks failed: Qt delivers a cross-thread signal through the receiving thread's event
+     loop, which is not running while the test blocks. The tests use ``qtbot.waitUntil``, which is
+     also how the real application receives results.
+- **Consequences:** (+) Columns are declared once per view and cannot drift from the API without a
+  test noticing. (+) The whole UI is testable headlessly. (−) Status colouring is opt-in per column
+  via ``colorize=True``, so a new status column must ask for it.

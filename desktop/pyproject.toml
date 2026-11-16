@@ -1,0 +1,44 @@
+[project]
+name = "nexus-desktop"
+version = "0.1.0"
+description = "NEXUS desktop client - a PySide6 front end for the NEXUS API"
+requires-python = ">=3.12"
+dependencies = [
+    "PySide6>=6.8",
+    "httpx>=0.28",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-qt>=4.4",
+    "ruff>=0.9",
+]
+
+# An application, not a library: see backend/pyproject.toml for the same reasoning.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --strict-markers"
+qt_api = "pyside6"
+markers = [
+    "gui: exercises Qt widgets (runs with the offscreen platform plugin)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RET", "PTH", "ASYNC", "N"]
+ignore = [
+    "N802", # Qt method overrides use camelCase by convention
+    "N803",
+    "N815",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["N806"]

@@ -224,23 +224,45 @@ Redis remains **unverified** until Phase 7 runs Docker - there is no Redis serve
 
 ---
 
-## Phase 6 — PySide6 Desktop ⬜
+## Phase 6 - Desktop UI (PySide6) ✅
 
-| # | Task |
-|---|---|
-| 6.1 | Dark theme + design tokens; `QMainWindow` + sidebar navigation |
-| 6.2 | API client layer (HTTPX sync or async-in-thread) with typed errors |
-| 6.3 | Dashboard widgets (healthy/failed proxies, active inboxes, running campaigns, recent activity) |
-| 6.4 | Proxy Manager view: table, filters, sort, details dialog |
-| 6.5 | Email Manager view: inbox list, message viewer (plain text), code display |
-| 6.6 | Registration Lab view: campaign wizard, progress, results table |
-| 6.7 | Task Monitor: live status, logs, cancel button |
-| 6.8 | Settings + Logs views; notifications/toasts |
-| 6.9 | Responsiveness proof: no blocking call on the GUI thread |
-| 6.10 | Tests: `pytest-qt` for view models; manual UI checklist |
+**Goal:** a polished, dark desktop client that stays responsive while background work runs - and
+that never becomes a second implementation of the business logic.
 
-**Exit criteria:** every listed view exists, the UI stays responsive during a running campaign,
-and the app works against the local backend.
+**Delivered:**
+
+| # | Task | Where |
+|---|---|---|
+| 6.1 | Dark theme: palette + stylesheet with role-named colour tokens, shared status colours | `desktop/app/theme.py` |
+| 6.2 | API client: typed methods, error translation, no Qt imports | `desktop/app/api_client.py` |
+| 6.3 | Off-thread execution: QRunnable + signals, bounded pool | `desktop/app/tasks.py` |
+| 6.4 | Reusable widgets: dict-backed table model, stat cards, toolbars | `desktop/app/widgets.py` |
+| 6.5 | Seven pages: Dashboard, Proxies, Inboxes, Registration, Task Monitor, Settings, Logs | `desktop/app/views/` |
+| 6.6 | Navigation rail, stacked pages, one status bar, view-visible-only monitor timer | `desktop/app/main_window.py` |
+| 6.7 | Client activity log, bounded by construction | `desktop/app/activity.py` |
+| 6.8 | 103 tests: client, formatting, theme, model, threading, every view, the main window | `desktop/tests/` |
+
+**Exit criteria - verified by execution:**
+- `uv run pytest` in `desktop/` -> 103 passed; `ruff check` clean.
+- every view is constructed against a fake API serving the **documented response shapes**, then
+  refreshed and inspected, so the tests fail if the client expects a field the API does not send.
+- responsiveness: a test asserts that submitted work runs on a thread other than the GUI thread,
+  and every API call goes through that path.
+- keyboard/behaviour-free guarantees that matter: no API key is rendered into the status bar, HTML
+  email bodies are never rendered, and the registration results pane keeps product defects and
+  controls encountered separate.
+- **live proof:** the client was run against a real backend (uvicorn + SQLite), and the Dashboard
+  reported the seeded data (`2 proxies · 1 inboxes · 0 campaigns · 0 jobs`), the Settings page
+  reported live readiness (`database: ok, mail_backend: degraded, ...`), and the proxy table showed
+  the 2 imported proxies - with the credential-bearing entry correctly refused by the API.
+
+**Known gaps:** no packaging/installer (a release build is Phase 7); the Task Monitor polls every
+2 seconds while visible rather than streaming; exports are reported by row count rather than
+offered as a save dialog, because file dialogs are untestable here and saving belongs to a
+packaging decision.
+
+**Not done on purpose:** no business logic in the client, no direct database access, and no
+settings that could weaken the backend's safety limits from the GUI.
 
 ---
 
