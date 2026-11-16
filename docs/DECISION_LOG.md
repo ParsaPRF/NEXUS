@@ -412,3 +412,49 @@ per decision, newest last.
 |---|---|---|
 | `PermissionError: [WinError 5]` from `os.makedirs` deep inside PyInstaller | The venv's interpreter is denied writes outside the workspace on this machine; system Python and cmd/PowerShell are not | build in the workspace, publish with `robocopy` |
 | A healthy windowed build reported exit code 1 | The PowerShell **call operator does not set `$LASTEXITCODE` for a GUI-subsystem executable**; the script read a stale value. Merging a build tool's stderr under ``$ErrorActionPreference='Stop'`` is a second, related trap | measure with `Start-Process -Wait -PassThru` and read `.ExitCode`; capture tool output to a log and check exit codes explicitly |
+
+---
+
+## D23 — Apache-2.0 for NEXUS's own code; LGPL-3.0 compliance for Qt in the binary build
+
+- **Status:** Accepted (Phase 7 / pre-release)
+- **Context:** Before publishing, the project had **no license** — which legally means all rights
+  reserved, so nobody could use it. The license of the dependencies also constrains what a project
+  may choose.
+- **Dependency audit (the input to this decision).** Run against the resolved sets, not from
+  documentation:
+
+  | Component | License | Effect on NEXUS |
+  |---|---|---|
+  | Everything in `backend/` | MIT, BSD-3-Clause, MPL-2.0, PSF-2.0, MIT-0 | none — permissive |
+  | Desktop runtime (httpx, certifi, …) | MIT, BSD-3-Clause, MPL-2.0 | none |
+  | **PySide6 / Qt 6.12** | **LGPL-3.0-only** (Qt dual-offers GPL-2.0/GPL-3.0 too) | binary redistribution has obligations; the source license is unaffected |
+  | PyInstaller 6.22.3 | GPLv2 **with bootloader exception** | none: the exception permits bundling under any license |
+
+  No component is GPL/AGPL in a way that would force NEXUS itself to be copyleft.
+
+- **Decision:**
+  1. NEXUS's own code is **Apache-2.0** — permissive, with an explicit patent grant and a trademark
+     clause, which is the usual choice for a platform others may build on.
+  2. The **packaged build** ships `LICENSE`, `NOTICE`, `THIRD-PARTY-NOTICES.md` and
+     `licenses/{LGPL-3.0,GPL-3.0}.txt`. LGPL-3.0 §4b requires the GPL and LGPL texts to accompany a
+     Combined Work, and §4a requires a prominent notice.
+  3. The build stays **onedir**, which keeps Qt as separate replaceable DLLs and satisfies §4d
+     (ability to relink against a modified library). A onefile build would fight this requirement
+     for no benefit — the size decision and the licence decision agree.
+- **Alternatives rejected:**
+  - *No license (status quo)* — nobody may legally use the project; publishing it would be
+    misleading rather than generous.
+  - *GPL-3.0* — would be forced only if we took Qt's GPL option. We do not need it, and it would
+    prevent companies from adopting the tool internally.
+  - *MIT* — simpler, but no patent grant. For a tool that may be used by companies, the explicit
+    patent grant is worth the extra page.
+  - *Commercial Qt license* — removes the LGPL obligations, but costs money and is a business
+    decision, not a technical one. Noted as the escape hatch if a locked-down build is ever needed.
+- **Consequences:** (+) The project can be published and used immediately, including commercially.
+  (+) Compliance is automated: the build script copies the legal files and **fails** if one is
+  missing, so a build cannot ship out of compliance.
+  (−) A redistributor must not strip `licenses/`, `NOTICE` or the separate Qt DLLs; this is stated in
+  `THIRD-PARTY-NOTICES.md` §1. (−) Adding a GPL/AGPL dependency later would force a licence
+  re-evaluation, so `THIRD-PARTY-NOTICES.md` §6 makes that an explicit decision rather than a side
+  effect of `uv add`.

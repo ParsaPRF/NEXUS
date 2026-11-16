@@ -142,12 +142,32 @@ try {
     # launcher. Copying them from the repository keeps one source of truth; editing them by hand in
     # the output folder would be lost on the next build.
     $extras = Join-Path $desktopDir "packaging"
+    $extraTarget = Join-Path $publishDist "NEXUS"
     if (Test-Path $extras) {
-        $extraTarget = Join-Path $publishDist "NEXUS"
         Copy-Item (Join-Path $extras "*") $extraTarget -Force
         $shipped = (Get-ChildItem $extras -File | ForEach-Object { $_.Name }) -join ", "
         Write-Host "      extras   : $shipped" -ForegroundColor Green
     }
+
+    # Ship the licence and the third-party notices. This is not optional politeness: the build
+    # redistributes Qt, which is LGPL-3.0, and LGPL section 4b requires the licence texts to
+    # accompany the work. A build that omits them is not redistributable.
+    $legal = @(
+        @{ Source = (Join-Path $repoRoot "LICENSE");                  Target = $extraTarget },
+        @{ Source = (Join-Path $repoRoot "NOTICE");                   Target = $extraTarget },
+        @{ Source = (Join-Path $repoRoot "THIRD-PARTY-NOTICES.md");   Target = $extraTarget },
+        @{ Source = (Join-Path $repoRoot "licenses");                 Target = (Join-Path $extraTarget "licenses") }
+    )
+    foreach ($item in $legal) {
+        if (Test-Path $item.Source) {
+            Copy-Item $item.Source $item.Target -Recurse -Force
+        } else {
+            throw "Required legal file is missing: $($item.Source)"
+        }
+    }
+    $licenceFiles = (Get-ChildItem (Join-Path $extraTarget "licenses") -File |
+        ForEach-Object { $_.Name }) -join ", "
+    Write-Host "      licences : LICENSE, NOTICE, THIRD-PARTY-NOTICES.md, licenses\{$licenceFiles}" -ForegroundColor Green
 
     if ($SkipSelfCheck) {
         Write-Host "`n[5/5] Self-check skipped (-SkipSelfCheck)." -ForegroundColor Yellow

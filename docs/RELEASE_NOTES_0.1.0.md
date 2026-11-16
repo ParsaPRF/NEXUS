@@ -3,6 +3,10 @@
 First complete build of the NEXUS platform: backend, desktop client, and the bundled demonstration
 target.
 
+**License: Apache License 2.0** — see [LICENSE](../LICENSE). You may use, modify and redistribute
+this, including commercially. One third-party obligation applies to the packaged build — see
+[Licensing of this build](#licensing-of-this-build) below.
+
 ## What is in this release
 
 | Component | Status |
@@ -19,10 +23,15 @@ target.
 ## The Windows build
 
 ```
-NEXUS-0.1.0-win64.zip   (49.5 MB compressed, ~121 MB unpacked, 218 files)
+NEXUS-0.1.0-win64.zip   (49.5 MB compressed, ~121 MB unpacked, 223 files)
   NEXUS.exe
   START-NEXUS.cmd       double-click launcher (put your API key in it once)
   README-FA.md          Persian quick-start written for the project owner
+  LICENSE               Apache-2.0 (this project)
+  NOTICE                attribution notices
+  THIRD-PARTY-NOTICES.md  every dependency and its licence
+  licenses\LGPL-3.0.txt   Qt's licence  ┐ required by LGPL-3.0 §4b when
+  licenses\GPL-3.0.txt    GPL-3.0 text  ┘ redistributing a Qt-based build
   _internal\...
 ```
 
@@ -61,7 +70,7 @@ type them every time:
 ### Verify the download
 
 ```
-SHA256: 9ADE2B2D71D4FD3B9C9D7EACB881DFE0842C8EA288F39812EE39EE20DE7CD769
+SHA256: F0CC0C8040E06FA9C4B52CDF4E9A08D42F4FE57756B0E087986C985B8D4C06A1
 ```
 
 ```powershell
@@ -87,6 +96,23 @@ reported `ok: true` with all 7 pages and live API readiness.
 > **PowerShell note:** the call operator does not set `$LASTEXITCODE` for a GUI-subsystem
 > executable. To read the code reliably use
 > `(Start-Process .\NEXUS.exe -ArgumentList "--self-check","report.json" -Wait -PassThru).ExitCode`
+
+## Licensing of this build
+
+| | |
+|---|---|
+| NEXUS's own code | **Apache-2.0** — permissive, with an explicit patent grant. Use it, fork it, ship it commercially. |
+| Bundled Qt (via PySide6 6.12) | **LGPL-3.0-only**. A redistributor must keep `LICENSE`, `NOTICE`, `THIRD-PARTY-NOTICES.md` and `licenses\` next to the executable, and must not remove the separate Qt DLLs under `_internal\PySide6\`. |
+| PyInstaller | GPLv2 **with the bootloader exception**, which permits bundling under any licence. |
+
+The build is *onedir* partly for this reason: it keeps Qt as 13 separate, replaceable DLLs, which is
+what LGPL-3.0 §4d requires. Full detail and the reasoning:
+[THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md) and
+[DECISION_LOG.md](DECISION_LOG.md) D23.
+
+If you fork NEXUS and distribute your own build, keep those files. If you need a build without the
+LGPL obligations, the answer is a commercial Qt licence — that is a business decision, not something
+this repository can decide for you.
 
 ## Known gaps (stated, not hidden)
 

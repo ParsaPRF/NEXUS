@@ -181,6 +181,7 @@ Start here, in this order:
 | [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | Every endpoint that exists today |
 | [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) | Set up, run, debug, troubleshoot |
 | [docs/LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md) | The concepts this project teaches, phase by phase |
+| [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) | Every dependency, its licence, and the Qt/LGPL obligations for binary builds |
 
 ---
 
@@ -224,4 +225,13 @@ are terminal outcomes that stop a campaign and are reported — never retried ar
 
 ## License
 
-Not yet chosen. Until one is added, treat the code as all-rights-reserved.
+**Apache License 2.0** — see [LICENSE](LICENSE). Copyright 2026 Amir Parsa Fatholahi.
+
+You may use, modify and redistribute NEXUS, including commercially, provided you keep the license
+and attribution notices. The licence includes an explicit patent grant.
+
+Third-party components are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). One of them
+matters if you redistribute the packaged Windows build: **Qt (via PySide6) is LGPL-3.0-only**, so a
+build must keep `licenses/LGPL-3.0.txt`, `licenses/GPL-3.0.txt` and `NOTICE` alongside it, and must
+not remove the separate Qt DLLs that make the library replaceable. The shipped build is *onedir* for
+exactly this reason. NEXUS's own source code is not affected: no dependency forces it to be GPL.

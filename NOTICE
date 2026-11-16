@@ -1,0 +1,16 @@
+NEXUS
+Copyright 2026 Amir Parsa Fatholahi
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It bundles or depends on third-party software, including:
+
+  * Qt for Python (PySide6) and Qt 6, Copyright (C) The Qt Company Ltd.,
+    licensed under the GNU Lesser General Public License v3 (LGPL-3.0).
+    See THIRD-PARTY-NOTICES.md and licenses/LGPL-3.0.txt.
+
+  * PyInstaller, Copyright (C) Giovanni Bajo and contributors,
+    used under its GPLv2 license with the bootloader exception that permits
+    bundling applications under any license.
+
+The full list, with versions and license texts, is in THIRD-PARTY-NOTICES.md.
