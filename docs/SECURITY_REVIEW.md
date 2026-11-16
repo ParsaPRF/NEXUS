@@ -146,7 +146,7 @@ that covers it.
 
 | # | Finding | Severity | Action |
 |---|---|---|---|
-| F1 | The Docker engine on this machine does not run, so real PostgreSQL/Redis/Mailpit verification did not happen | verification gap, not a defect | §8; the e2e suite is written and skips cleanly |
+| F1 | The Docker engine on this machine does not run, so real PostgreSQL/Redis/Mailpit verification did not happen. **Root cause: Docker Desktop 4.87.0 is installed per-user without `com.docker.service` or `C:\ProgramData\DockerDesktop`, so the Linux engine has nothing to start it** | verification gap, not a defect | §8; repair procedure in `DOCKER_RECOVERY.md` |
 | F2 | The RQ worker path is covered by `fakeredis` and a real dispatcher run, but not by a real Redis worker | verification gap | included in the e2e suite (`tests/e2e/test_real_infrastructure.py`) |
 | F3 | Rate limiting is enforced **outbound** (fixed campaign rate, bounded concurrency) but there is no inbound request-rate limit on the API | low, local-first tool | the `RateLimitedError` type exists; an inbound limiter is a candidate for a future phase |
 | F4 | The desktop client does not verify a TLS certificate pin and cannot be told to trust a private CA from the GUI | low | `NEXUS_DESKTOP_VERIFY_TLS` exists; a CA-bundle option is documented as future work |
@@ -201,11 +201,19 @@ test that asserts the row exists:
 
 ## 8. Environment limitation (must not be read as a pass)
 
-The Docker engine on the development machine is not functional: the `docker` CLI accepts local
-commands (`docker context show`) but every call that reaches the daemon
-(`docker info`, `docker version`, `docker ps`, `docker desktop status`) hangs, and the
-`docker-desktop` WSL distribution contains neither `dockerd` nor `/var/run/docker.sock`. Docker
-Desktop was restarted during this review; the engine did not come up.
+The Docker engine on the development machine is not functional, and the reason is now established
+rather than suspected:
+
+* `Get-Service com.docker*` finds **no `com.docker.service`**, and `C:\ProgramData\DockerDesktop`
+  does not exist.
+* Docker Desktop 4.87.0 is installed **per-user only**, at `%LOCALAPPDATA%\Programs\DockerDesktop`.
+* The Linux engine is supervised by that missing Windows service, so the `docker-desktop` WSL
+  distribution boots with no `dockerd` and no `/var/run/docker.sock`.
+* `docker desktop diagnose` reports `open \\.\pipe\dockerBackendApiServer: The system cannot find the
+  file specified` for every backend component.
+* Virtualization is present (`HypervisorPresent = True`) and WSL2 works, so the host is fine.
+  Restarting Docker Desktop during this review could not help: an incomplete installation has
+  nothing to start.
 
 Consequences:
 
@@ -213,8 +221,10 @@ Consequences:
   a real RQ worker, and the end-to-end registration flow on real infrastructure.
 * **written and ready:** `tests/e2e/test_real_infrastructure.py` covers exactly those paths and
   skips with a message naming what is missing. It is lint-clean and collects correctly.
-* **tracked as:** ROADMAP Phase 7 open item; it stays open until someone runs it on a working
-  Docker host.
+* **repair procedure:** `docs/DOCKER_RECOVERY.md` — reinstall as administrator, then
+  `docker compose up -d` and `uv run pytest -m e2e` (11 tests). It also lists how to record the
+  result in this document and in the roadmap.
+* **tracked as:** ROADMAP Phase 7 open item.
 
 Claiming any of those paths works would violate the project's own rule: never claim something
 works without having run it.

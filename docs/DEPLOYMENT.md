@@ -80,6 +80,11 @@ docker run --rm -p 127.0.0.1:1025:1025 -p 127.0.0.1:8025:8025 axllent/mailpit
 
 ## 2. Docker profile
 
+> **Before you start:** if `docker info` hangs or returns an error, read
+> [DOCKER_RECOVERY.md](DOCKER_RECOVERY.md). The most common cause on Windows is Docker Desktop
+> installed per-user, without the `com.docker.service` that launches the Linux engine — reinstalling
+> it **as administrator** fixes it.
+
 ### 2.1 Prepare
 
 ```powershell

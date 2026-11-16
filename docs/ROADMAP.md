@@ -292,19 +292,24 @@ settings that could weaken the backend's safety limits from the GUI.
 
 ### The one blocked item, and exactly what was tried
 
-Criterion 2 of the brief (Compose launches the infrastructure) could not be executed:
+Criterion 2 of the brief (Compose launches the infrastructure) could not be executed.
+**Root cause established and documented** — see [DOCKER_RECOVERY.md](DOCKER_RECOVERY.md):
 
 1. `docker info`, `docker version`, `docker ps` and `docker desktop status` all hang; local
    commands such as `docker context show` answer immediately.
-2. The named pipes exist (`\\.\pipe\\dockerDesktopLinuxEngine`), and the `docker-desktop` WSL
-   distribution boots and answers `uname`.
-3. Inside that distribution there is **no `dockerd`, no `containerd` and no
-   `/var/run/docker.sock`** - the engine is not merely stopped, its binaries are absent from the
-   runtime that is supposed to host them.
-4. Docker Desktop was restarted during this review (processes stopped, launcher started from
-   `%LOCALAPPDATA%\\Programs\\DockerDesktop\\frontend\\Docker Desktop.exe`); the engine did not come up.
+2. `Get-Service com.docker*` finds **no `com.docker.service`**, and `C:\ProgramData\DockerDesktop`
+   does not exist. Docker Desktop 4.87.0 is installed **per-user only**, at
+   `%LOCALAPPDATA%\Programs\DockerDesktop`.
+3. That missing Windows service is what launches the Linux engine, so the `docker-desktop` WSL
+   distribution boots with **no `dockerd`** and no `/var/run/docker.sock`.
+4. `docker desktop diagnose` agrees: `open \\.\pipe\dockerBackendApiServer: The system cannot find
+   the file specified` for every backend component.
+5. Virtualization is available (`HypervisorPresent = True`) and WSL2 works, so the host is not the
+   problem. Docker Desktop was restarted during the review; an incomplete installation has nothing
+   to start, so a restart cannot fix it.
 
-**To close this item:** repair or reinstall Docker Desktop until `docker info` returns, then
+**To close this item:** reinstall Docker Desktop **as administrator** — steps, expected output and
+the checklist for recording the result are in [DOCKER_RECOVERY.md](DOCKER_RECOVERY.md) — then
 
 ```powershell
 cd NEXUS

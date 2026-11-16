@@ -174,6 +174,7 @@ Start here, in this order:
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model, controls, and the rules that will not be relaxed |
 | [docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) | Phase 7 review: what was run, what it found, what remains unverified |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Local and Docker profiles, configuration, operations, troubleshooting |
+| [docs/DOCKER_RECOVERY.md](docs/DOCKER_RECOVERY.md) | Why the Docker engine here does not run, and how to repair it |
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Using the desktop client, and how to read a failed test |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phase-by-phase plan and exit criteria |
 | [docs/DECISION_LOG.md](docs/DECISION_LOG.md) | Every significant architectural decision (ADR-lite) |
@@ -191,7 +192,7 @@ could not be executed on this machine.
 | # | Criterion | Status | Evidence |
 |---|---|---|---|
 | 1 | The application starts reliably | ✅ | started repeatedly; `/health` and `/health/ready` answered |
-| 2 | Docker Compose launches all required infrastructure | ⚠️ | file authored, validated (`docker compose config`, 5 services); **not started** — the Docker engine does not run here |
+| 2 | Docker Compose launches all required infrastructure | ⚠️ | file authored, validated (`docker compose config`, 5 services); **not started** — root cause found: Docker Desktop is installed per-user without `com.docker.service`, so the Linux engine cannot start. Repair + verification procedure: [docs/DOCKER_RECOVERY.md](docs/DOCKER_RECOVERY.md) |
 | 3 | Proxy sources can be managed and proxies validated safely | ✅ | 47 API tests + 19 checker tests; credential refusal proven |
 | 4 | Test inboxes can be created and managed | ✅ | 53 API tests; addresses only on reserved domains |
 | 5 | Test emails can be received and inspected | ✅ | ingestion, search and export tested against the in-memory backend; real Mailpit covered by the e2e suite |
