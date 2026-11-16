@@ -171,14 +171,9 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
-    # PHASE 5: replace with the real worker entry point:
-    #   command: ["python", "-m", "app.workers.main"]
-    # It currently idles so `docker compose up` stays healthy while the worker is unimplemented,
-    # rather than crash-looping and hiding real errors in noise.
-    command:
-      - sh
-      - -c
-      - 'echo "NEXUS worker is not implemented until Phase 5 (see docs/ROADMAP.md)"; exec sleep infinity'
+    # Phase 5 implemented the worker, so this is now the real entry point rather than a
+    # placeholder that slept forever.
+    command: ["python", "-m", "app.workers.main"]
     networks:
       - nexus_net
 

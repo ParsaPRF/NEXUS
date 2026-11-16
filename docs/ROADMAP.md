@@ -266,41 +266,70 @@ settings that could weaken the backend's safety limits from the GUI.
 
 ---
 
-## Phase 7 — Finalization ⬜
+## Phase 7 - Finalization ⚠️ mostly complete
 
-| # | Task |
-|---|---|
-| 7.1 | **Start Docker Desktop** and run the full Compose stack (currently 🚫 unverified) |
-| 7.2 | Real Postgres/Redis/Mailpit E2E suite (`-m e2e`) |
-| 7.3 | Security review: SSRF corpus, secret redaction, auth, uploads, timeouts, dependency audit |
-| 7.4 | DB integrity: constraints, cascade behaviour, migration downgrade check |
-| 7.5 | Playwright E2E against the demo target |
-| 7.6 | Release config, installation guide, user documentation |
-| 7.7 | Cold-start check on a clean environment |
+**Goal:** prove the whole thing works together, review security, and make it installable.
 
-**Exit criteria:** all 12 acceptance criteria from the brief are demonstrably satisfied, with
-the Docker path verified on a machine where the daemon actually runs.
+| # | Task | Status | Evidence |
+|---|---|---|---|
+| 7.1 | Start Docker and run the full Compose stack | ❌ **blocked by the environment** | engine does not run on this machine; see below |
+| 7.2 | Real Postgres/Redis/Mailpit e2e suite | ✅ written, ❌ not executed | `backend/tests/e2e/test_real_infrastructure.py` (11 tests) collects and skips with a message naming what is missing |
+| 7.3 | Security review | ✅ | `docs/SECURITY_REVIEW.md`: SSRF corpus (54 tests), redaction (36 tests), git-history secret scan, `pip-audit` on both projects |
+| 7.4 | Database integrity and migration reversibility | ✅ | upgrade -> downgrade -> upgrade on a fresh database; `scripts/check_migration.py` reports 14 tables, 50 indexes, 13 foreign keys |
+| 7.5 | Playwright UI adapter | ⏭️ deliberately deferred | the bundled demo target has no HTML UI to drive (D16) |
+| 7.6 | Release configuration and documentation | ✅ | `docs/DEPLOYMENT.md`, `docs/USER_GUIDE.md`, acceptance-criteria table in the README, compose worker command replaced with the real entry point |
+| 7.7 | Cold-start check | ✅ (local profile) | fresh database migrated, server started, authenticated request served, test suite green |
+
+### What was verified by execution in this phase
+
+* `pip-audit` on both dependency sets: **no known vulnerabilities**.
+* git history: `.env` was never committed; no credential pattern in history; none in the tree.
+* migration chain: `upgrade head` -> `downgrade base` -> `upgrade head`, with the schema checked
+  after each step.
+* backend suite: 654 passed. Desktop suite: 103 passed. `ruff` clean in both.
+* the desktop client was run against a live backend and reported real seeded data.
+
+### The one blocked item, and exactly what was tried
+
+Criterion 2 of the brief (Compose launches the infrastructure) could not be executed:
+
+1. `docker info`, `docker version`, `docker ps` and `docker desktop status` all hang; local
+   commands such as `docker context show` answer immediately.
+2. The named pipes exist (`\\.\pipe\\dockerDesktopLinuxEngine`), and the `docker-desktop` WSL
+   distribution boots and answers `uname`.
+3. Inside that distribution there is **no `dockerd`, no `containerd` and no
+   `/var/run/docker.sock`** - the engine is not merely stopped, its binaries are absent from the
+   runtime that is supposed to host them.
+4. Docker Desktop was restarted during this review (processes stopped, launcher started from
+   `%LOCALAPPDATA%\\Programs\\DockerDesktop\\frontend\\Docker Desktop.exe`); the engine did not come up.
+
+**To close this item:** repair or reinstall Docker Desktop until `docker info` returns, then
+
+```powershell
+cd NEXUS
+docker compose up -d
+cd backend
+uv run pytest -m e2e
+```
+
+The e2e module skips while services are absent, so a green default suite is not evidence that this
+item passed - it is evidence that it was skipped. Recorded as F1 in `docs/SECURITY_REVIEW.md`.
+
+### Also not done (and why)
+
+* **Desktop packaging.** No PyInstaller spec or installer. `uv run python -m app.main` is the
+  supported way to start the client. A packaged build also needs a decision about where exports are
+  saved, which is why it was left rather than guessed.
+* **Proxy check-history pruning.** Deferred to the retention job noted in Phase 5.
+* **Inbound API rate limiting.** The type exists, the limiter does not; recorded as F3.
 
 ---
 
-## Critical path and sequencing notes
+## Definition of done for this project
 
-```
-0 -> 1 -> 2 ---------\
-         \-> 3 -> 4 ---> 5 -> 6 -> 7
-```
+The MVP is complete when a new developer can clone the repository, install, start, and drive the
+whole flow (inbox -> registration -> code -> verified account -> exported report) against the
+bundled demo target, with tests covering the critical path.
 
-- **1 → 2 and 1 → 3 can proceed in parallel**; both depend only on the foundation.
-- **4 depends on 3** (verification needs inboxes) and on 2 only if proxy-backed *testing* were
-  wanted — which it is not, by design. So Phase 4 does **not** depend on Phase 2.
-- **5 depends on 2/3/4** because it wraps their long-running operations.
-- **6 depends on 2–5** because it renders their results.
-- **7 depends on everything**, plus a running Docker daemon.
-
-## Environment blockers carried forward
-
-| Blocker | Blocks | Clears when |
-|---|---|---|
-| Docker daemon not running | 7.1–7.2, 7.5 | Docker Desktop is started |
-| Ports 5432/6379/8025 closed | real-infra verification in 2–5 | Compose stack is up |
-| No authorized external target | a non-demo Phase 4 run | Owner supplies an authorized staging URL + note |
+That is true today on the `local` profile. On the `docker` profile it is written but unproven,
+for the environment reason above.

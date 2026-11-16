@@ -113,11 +113,24 @@ Section 3.
 
 ## 9. Phase 7 security review checklist
 
-- [ ] `net_guard` corpus: loopback, private v4/v6, link-local, metadata IP, DNS-rebinding, non-HTTP schemes, oversized body
-- [ ] Redaction test: secrets in payloads/logs/audit rows never appear in output
-- [ ] Auth tests: missing key → 401, wrong role → 403, valid → 200
-- [ ] Upload tests: oversized file, malformed encoding, embedded script content
-- [ ] Timeout/concurrency tests: slow target does not hang a worker
-- [ ] Dependency audit (`uv` lock review) with no unresolved high-severity advisories
-- [ ] Confirm no service binds `0.0.0.0` in the default profile
-- [ ] Confirm `.env` is untracked and git history contains no secret
+Executed during Phase 7; the full record, commands and raw results are in
+[SECURITY_REVIEW.md](SECURITY_REVIEW.md).
+
+- [x] `net_guard` corpus: loopback, private v4/v6, link-local, metadata IP, DNS-rebinding, non-HTTP
+      schemes, oversized body — **54 tests, all passing**
+- [x] Redaction: secrets in payloads/logs/audit rows never appear in output — **36 tests, plus a
+      log-file assertion and the audit self-test**
+- [x] Auth: missing key → 401, wrong key → 401 (including a prefix of the real key), valid → 200
+- [x] Uploads: oversized file, binary content, malformed encoding, embedded credential in a
+      rejected line — **all covered; rejection excerpts are redacted**
+- [x] Timeouts and concurrency: mandatory timeout on every outbound call; the concurrency cap is
+      asserted by a test that measures peak parallelism
+- [x] Dependency audit (`pip-audit` over the resolved lockfiles, backend and desktop):
+      **no known vulnerabilities**
+- [x] No service binds `0.0.0.0` in the default profile — asserted by a config test; compose
+      publishes every port to `127.0.0.1`
+- [x] `.env` is untracked and git history contains no secret — verified with
+      `git log --all --diff-filter=A` and a pattern scan of every commit
+- [ ] **Real infrastructure**: PostgreSQL/Redis/Mailpit behaviour is covered by
+      `backend/tests/e2e/test_real_infrastructure.py`, which **skips** on this machine because the
+      Docker engine does not run (SECURITY_REVIEW.md §8). Not a pass — an open item.

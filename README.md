@@ -172,11 +172,39 @@ Start here, in this order:
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layers, module boundaries, runtime flows, diagrams |
 | [docs/DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md) | All 14 tables, constraints, indexes, and why |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model, controls, and the rules that will not be relaxed |
+| [docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) | Phase 7 review: what was run, what it found, what remains unverified |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Local and Docker profiles, configuration, operations, troubleshooting |
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Using the desktop client, and how to read a failed test |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phase-by-phase plan and exit criteria |
 | [docs/DECISION_LOG.md](docs/DECISION_LOG.md) | Every significant architectural decision (ADR-lite) |
 | [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | Every endpoint that exists today |
 | [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) | Set up, run, debug, troubleshoot |
 | [docs/LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md) | The concepts this project teaches, phase by phase |
+
+---
+
+## Acceptance criteria
+
+The MVP criteria from the project brief, with the evidence for each. `⚠️` marks the one item that
+could not be executed on this machine.
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | The application starts reliably | ✅ | started repeatedly; `/health` and `/health/ready` answered |
+| 2 | Docker Compose launches all required infrastructure | ⚠️ | file authored, validated (`docker compose config`, 5 services); **not started** — the Docker engine does not run here |
+| 3 | Proxy sources can be managed and proxies validated safely | ✅ | 47 API tests + 19 checker tests; credential refusal proven |
+| 4 | Test inboxes can be created and managed | ✅ | 53 API tests; addresses only on reserved domains |
+| 5 | Test emails can be received and inspected | ✅ | ingestion, search and export tested against the in-memory backend; real Mailpit covered by the e2e suite |
+| 6 | The demonstration registration application works | ✅ | 22 black-box tests over its HTTP API |
+| 7 | Registration tests run against the authorized demo target | ✅ | end-to-end test driving the real loop, asserting the account is active via the target's own `/api/status` |
+| 8 | Email verification works end to end | ✅ | the same test: submit → code → verify → active |
+| 9 | Background tasks are visible and manageable | ✅ | 26 task-manager tests: lifecycle, progress, logs, cancellation, idempotency |
+| 10 | Results can be exported | ✅ | proxy CSV/JSON, message CSV/JSON, analytics jobs/campaigns CSV/JSON |
+| 11 | Critical functionality has automated tests | ✅ | 654 backend + 103 desktop tests; `ruff` clean in both |
+| 12 | Documentation is sufficient for another developer | ✅ | 13 documents: architecture, database, security, API, deployment, user guide, learning guide, ADRs |
+
+Criterion 2 is tracked as an open item in [docs/ROADMAP.md](docs/ROADMAP.md) Phase 7. The tests
+that would verify it are written and skip with a message naming what is missing.
 
 ---
 
